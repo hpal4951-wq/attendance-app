@@ -6,6 +6,8 @@ import {
   getMyAttendance,
   getPendingAttendance,
   reviewAttendance,
+  verifyLocation,
+  getTodayAttendance,
 } from "../controllers/attendance.controller.js";
 import { protect } from "../middleware/auth.middleware.js";
 import { allowRoles } from "../middleware/role.middleware.js";
@@ -13,6 +15,8 @@ import { allowRoles } from "../middleware/role.middleware.js";
 const router = express.Router();
 
 // student
+router.post("/verify-location", protect, allowRoles("student"), verifyLocation);
+router.get("/today", protect, allowRoles("student"), getTodayAttendance);
 router.post("/auto-check", protect, allowRoles("student"), autoCheckAttendance);
 router.get("/my", protect, allowRoles("student"), getMyAttendance);
 

@@ -26,6 +26,14 @@ function resolveHost() {
 
 export const API_BASE_URL = `http://${resolveHost()}:${API_PORT}/api`;
 
+/**
+ * DEV-ONLY: shows a "Test Location" section in the Attendance screen
+ * that sends fixed coordinates to the backend for testing.
+ * The backend still makes the final attendance decision.
+ * Set to false before building a production release.
+ */
+export const ENABLE_TEST_LOCATION = true;
+
 export const APP_NAME = "HostelConnect";
 export const APP_TAGLINE = "Smart Hostel Attendance & Mess Management";
 export const APP_VERSION = "1.0.0";

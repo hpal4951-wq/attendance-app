@@ -6,6 +6,14 @@
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "assetBundlePatterns": ["**/*"],
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "HostelConnect uses your location to automatically verify your presence at the hostel."
+        }
+      ]
+    ],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.hostelconnect.app"

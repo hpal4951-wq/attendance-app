@@ -23,6 +23,14 @@ const getAttendanceScope = async (userId) => {
   return { all: false, studentSelf: true };
 };
 
+// Returns the current attendance slot if the current time falls inside
+// one of the hostel's configured windows, otherwise null.
+const getCurrentSlot = (windows = []) => {
+  const now = getCurrentTimeHHMM();
+  const found = windows.find((w) => isTimeInRange(now, w.startTime, w.endTime));
+  return found ? found.slot : null;
+};
+
 export const autoCheckAttendance = async (req, res) => {
   try {
     const { latitude, longitude, accuracy, slot, deviceId, isMocked = false } =
@@ -173,6 +181,188 @@ export const autoCheckAttendance = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Server error while processing attendance",
+      error: error.message,
+    });
+  }
+};
+
+export const verifyLocation = async (req, res) => {
+  try {
+    const { latitude, longitude, accuracy, isMocked = false } = req.body;
+
+    if (latitude === undefined || latitude === null || longitude === undefined || longitude === null) {
+      return res.status(400).json({
+        success: false,
+        message: "latitude and longitude are required",
+      });
+    }
+
+    const user = await User.findById(req.user.id);
+    if (!user || user.role !== "student") {
+      return res.status(403).json({
+        success: false,
+        message: "Only students can verify attendance location",
+      });
+    }
+    if (!user.isActive) {
+      return res.status(403).json({
+        success: false,
+        message: "User is inactive",
+      });
+    }
+
+    const student = await StudentProfile.findOne({ userId: user._id });
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        message: "Student profile not found",
+      });
+    }
+    if (student.status !== "active") {
+      return res.status(403).json({
+        success: false,
+        message: "Student profile is not active",
+      });
+    }
+
+    // The backend derives the hostel + radius from the database — never from the client
+    const hostel = await Hostel.findById(user.hostelId || student.hostelId);
+    if (!hostel) {
+      return res.status(404).json({
+        success: false,
+        message: "Hostel not found",
+      });
+    }
+
+    const radius = hostel.radiusMeters || 120;
+    const distance = haversineDistance(
+      Number(latitude),
+      Number(longitude),
+      hostel.latitude,
+      hostel.longitude
+    );
+
+    await LocationLog.create({
+      studentId: student._id,
+      latitude: Number(latitude),
+      longitude: Number(longitude),
+      accuracy: accuracy ?? null,
+      isMocked,
+      source: "attendance_verify_location",
+    });
+
+    let status;
+    let reason;
+    if (isMocked) {
+      status = "location_unavailable";
+      reason = "Mock location suspected";
+    } else if (accuracy && Number(accuracy) > 150) {
+      status = "location_unavailable";
+      reason = "Location accuracy too low";
+    } else if (distance <= radius) {
+      status = "present";
+      reason = "Inside hostel attendance radius";
+    } else {
+      status = "outside_hostel";
+      reason = "Outside hostel attendance radius";
+    }
+
+    // Persist today's record only when we are inside a configured attendance window.
+    // Outside windows the live verification result is still returned for display.
+    const slot = getCurrentSlot(hostel.attendanceWindows);
+    if (slot) {
+      const date = getTodayDateString();
+      const recordStatus =
+        status === "present" ? "present" : status === "outside_hostel" ? "absent" : "pending";
+
+      await Attendance.findOneAndUpdate(
+        { studentId: student._id, date, slot },
+        {
+          studentId: student._id,
+          hostelId: hostel._id,
+          date,
+          slot,
+          status: recordStatus,
+          latitude: Number(latitude),
+          longitude: Number(longitude),
+          accuracy: accuracy ?? null,
+          distanceFromHostel: distance,
+          markedAt: new Date(),
+          source: "auto_location",
+          reason,
+        },
+        { upsert: true, new: true }
+      );
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        status,
+        distanceFromHostel: distance,
+        allowedRadius: radius,
+        accuracy: accuracy ?? null,
+        reason,
+        slot: slot || null,
+        verifiedAt: new Date(),
+      },
+    });
+  } catch (error) {
+    console.error("verifyLocation error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Server error while verifying location",
+      error: error.message,
+    });
+  }
+};
+
+export const getTodayAttendance = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user || user.role !== "student") {
+      return res.status(403).json({
+        success: false,
+        message: "Only students can view their attendance",
+      });
+    }
+
+    const student = await StudentProfile.findOne({ userId: user._id })
+      .populate({ path: "hostelId", select: "name address radiusMeters" })
+      .populate({ path: "blockId", select: "name" })
+      .populate({ path: "roomId", select: "roomNumber floor" });
+
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        message: "Student profile not found",
+      });
+    }
+
+    const date = getTodayDateString();
+    const records = await Attendance.find({ studentId: student._id, date }).sort({
+      markedAt: -1,
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        date,
+        allowedRadius: student.hostelId?.radiusMeters ?? null,
+        student: {
+          studentCode: student.studentCode,
+          hostel: student.hostelId || null,
+          block: student.blockId || null,
+          room: student.roomId || null,
+        },
+        records,
+      },
+    });
+  } catch (error) {
+    console.error("getTodayAttendance error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Server error while fetching today's attendance",
       error: error.message,
     });
   }

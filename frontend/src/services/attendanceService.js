@@ -48,3 +48,36 @@ export async function getPendingAttendance() {
 export async function reviewAttendance(id, { status, reason }) {
   return apiPatch(`/attendance/${id}/review`, { status, reason });
 }
+
+// ─── Student automatic attendance (Prompt 4) ────────────────
+// The backend derives student/hostel/block/room/radius from the JWT.
+// The frontend only sends raw location data.
+
+export async function verifyLocation({ latitude, longitude, accuracy, isMocked }) {
+  return apiPost("/attendance/verify-location", {
+    latitude,
+    longitude,
+    accuracy,
+    isMocked,
+  });
+}
+
+export async function getTodayAttendance() {
+  const res = await apiGet("/attendance/today");
+  const data = res?.data || {};
+  return {
+    date: data.date || null,
+    allowedRadius: data.allowedRadius ?? null,
+    student: data.student || null,
+    records: Array.isArray(data.records) ? data.records : [],
+  };
+}
+
+export async function getAttendanceHistory(params = {}) {
+  return getMyAttendance(params);
+}
+
+export async function getAttendanceStatus() {
+  const today = await getTodayAttendance();
+  return today.records?.[0] || null;
+}
