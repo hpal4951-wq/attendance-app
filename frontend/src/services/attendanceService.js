@@ -1,25 +1,50 @@
-import { apiGet, apiPatch, apiPost } from "./api";
+import { apiGet, apiPost, apiPatch } from "./api";
 
-export async function autoCheckAttendance(payload) {
-  return apiPost("/attendance/auto-check", payload);
+export async function autoCheckAttendance({
+  latitude,
+  longitude,
+  accuracy,
+  slot,
+  deviceId,
+  isMocked,
+}) {
+  return apiPost("/attendance/auto-check", {
+    latitude,
+    longitude,
+    accuracy,
+    slot,
+    deviceId,
+    isMocked,
+  });
 }
 
-export async function getMyAttendance(query = "") {
-  return apiGet(`/attendance/my${query}`);
+export async function getMyAttendance({ month, year, slot } = {}) {
+  let query = "/attendance/my";
+  const params = [];
+  if (month) params.push(`month=${month}`);
+  if (year) params.push(`year=${year}`);
+  if (slot) params.push(`slot=${slot}`);
+  if (params.length) query += "?" + params.join("&");
+
+  return apiGet(query);
 }
 
-export async function getAttendanceList(date, slot) {
-  return apiGet(`/attendance/list?date=${date}&slot=${slot}`);
+export async function getAttendanceByDate(date, slot) {
+  let query = `/attendance/list?date=${date}`;
+  if (slot) query += `&slot=${slot}`;
+  return apiGet(query);
 }
 
 export async function getAttendanceSummary(date) {
-  return apiGet(`/attendance/summary?date=${date}`);
+  let query = "/attendance/summary";
+  if (date) query += `?date=${date}`;
+  return apiGet(query);
 }
 
 export async function getPendingAttendance() {
   return apiGet("/attendance/pending");
 }
 
-export async function reviewAttendance(id, payload) {
-  return apiPatch(`/attendance/${id}/review`, payload);
+export async function reviewAttendance(id, { status, reason }) {
+  return apiPatch(`/attendance/${id}/review`, { status, reason });
 }

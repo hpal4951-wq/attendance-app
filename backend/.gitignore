@@ -6,3 +6,7 @@ backend/.env
 
 dist/
 build/
+
+# runtime logs
+*.log
+node.pid
