@@ -36,6 +36,7 @@ export default function AppInput({
           style={styles.input}
           placeholder={placeholder}
           placeholderTextColor={COLORS.textMuted}
+          accessibilityLabel={label || placeholder}
           value={value}
           onChangeText={onChangeText}
           secureTextEntry={hidden}

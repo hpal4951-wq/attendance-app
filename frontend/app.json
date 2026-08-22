@@ -1,7 +1,23 @@
 {
   "expo": {
-    "name": "frontend",
-    "slug": "frontend",
-    "version": "1.0.0"
+    "name": "HostelConnect",
+    "slug": "hostel-connect",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.hostelconnect.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#2563eb"
+      },
+      "package": "com.hostelconnect.app"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    }
   }
 }

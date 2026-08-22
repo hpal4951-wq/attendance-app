@@ -2,9 +2,9 @@ import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { COLORS, FONT_SIZE, RADIUS, SPACING, SHADOW } from "../theme";
 
-export default function StatCard({ label, value, icon, color = COLORS.primary }) {
+export default function StatCard({ label, value, icon, color = COLORS.primary, style }) {
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, style]}>
       <View style={[styles.iconBox, { backgroundColor: color + "15" }]}>
         <Text style={styles.icon}>{icon}</Text>
       </View>

@@ -1,19 +1,30 @@
 import { Platform } from "react-native";
 
-// Change this to your PC's local IP for physical device testing
+/**
+ * ── API CONFIGURATION ─────────────────────────────────────────────
+ *
+ * Host selection:
+ *   - Android emulator  → host machine is reached via 10.0.2.2
+ *   - iOS simulator/web → localhost works directly
+ *   - Physical device   → must use your PC's local network IP.
+ *
+ * To test on a physical device:
+ *   1. Set USE_PC_IP to true
+ *   2. Set PC_IP to your PC's LAN IP (run `ipconfig` on Windows /
+ *      `ifconfig` on macOS/Linux to find it)
+ *   3. Keep your phone on the same WiFi as your PC
+ */
 const PC_IP = "192.168.1.100";
+const USE_PC_IP = false;
+const API_PORT = 5000;
 
-// Android emulator uses 10.0.2.2 to reach localhost
-// iOS simulator and web use localhost
-// Physical device uses PC_IP on the same WiFi network
-let API_BASE_URL;
-if (Platform.OS === "android") {
-  API_BASE_URL = `http://${PC_IP}:5000/api`;
-} else {
-  API_BASE_URL = "http://localhost:5000/api";
+function resolveHost() {
+  if (USE_PC_IP) return PC_IP;
+  if (Platform.OS === "android") return "10.0.2.2";
+  return "localhost";
 }
 
-export { API_BASE_URL };
+export const API_BASE_URL = `http://${resolveHost()}:${API_PORT}/api`;
 
 export const APP_NAME = "HostelConnect";
 export const APP_TAGLINE = "Smart Hostel Attendance & Mess Management";

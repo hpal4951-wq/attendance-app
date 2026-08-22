@@ -14,6 +14,7 @@ import { COLORS, FONT_SIZE, RADIUS, SPACING } from "../../theme";
 import { useAuth } from "../../context/AuthContext";
 import { AppInput, AppButton, Logo } from "../../components";
 import { isValidPhone } from "../../utils/validators";
+import { getOrCreateDeviceId } from "../../utils/storage";
 
 export default function LoginScreen() {
   const { login } = useAuth();
@@ -75,10 +76,11 @@ export default function LoginScreen() {
 
     try {
       setLoading(true);
+      const deviceId = await getOrCreateDeviceId();
       const res = await login({
         phone: phone.trim(),
         password: password.trim(),
-        deviceId: `device-${Date.now()}`,
+        deviceId,
       });
 
       if (!res.success) {

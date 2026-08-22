@@ -42,6 +42,11 @@ const userSchema = new mongoose.Schema(
       ref: "Hostel",
       default: null,
     },
+    blockId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Block",
+      default: null,
+    },
   },
   { timestamps: true }
 );

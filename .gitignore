@@ -1,0 +1,6 @@
+# Metro / Expo cache (workspace root)
+.expo/
+
+# OS
+.DS_Store
+Thumbs.db

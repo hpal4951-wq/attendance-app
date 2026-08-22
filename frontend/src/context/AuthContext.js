@@ -1,9 +1,18 @@
 import React, { createContext, useState, useEffect, useCallback, useContext } from "react";
-import { setToken, getToken, removeToken, setUser, getUser, removeUser, clearAuth } from "../utils/storage";
-import { loginUser as loginAPI, getMe } from "../services/authService";
+import { getToken, clearAuth } from "../utils/storage";
+import { loginUser as loginAPI, getCurrentUser as getMe } from "../services/authService";
 
 const AuthContext = createContext(null);
 
+/**
+ * AuthProvider — manages authentication state for the entire app.
+ *
+ * State:  user | token | loading | isAuthenticated
+ * Actions: login() | logout() | restoreSession()
+ *
+ * Storage is handled exclusively by authService / storage.js.
+ * This context only mirrors the in-memory state.
+ */
 export function AuthProvider({ children }) {
   const [user, setUserState] = useState(null);
   const [token, setTokenState] = useState(null);
@@ -42,12 +51,12 @@ export function AuthProvider({ children }) {
   }, [restoreSession]);
 
   // ─── Login ───
+  // loginAPI already persists token + user to AsyncStorage.
+  // We only mirror them into React state here.
   const login = useCallback(async ({ phone, password, deviceId }) => {
     const res = await loginAPI({ phone, password, deviceId });
 
     if (res.success && res.token) {
-      await setToken(res.token);
-      await setUser(res.user);
       setTokenState(res.token);
       setUserState(res.user);
     }

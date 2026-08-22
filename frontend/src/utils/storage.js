@@ -1,6 +1,26 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { STORAGE_KEYS } from "../constants/config";
 
+const DEVICE_ID_KEY = "device_id";
+
+// ─── Device ID ───
+// The backend binds the first device that logs in to a user account.
+// Keep a stable device ID across app restarts / re-logins so the
+// device-mismatch check works as intended.
+export async function getOrCreateDeviceId() {
+  try {
+    let deviceId = await AsyncStorage.getItem(DEVICE_ID_KEY);
+    if (!deviceId) {
+      deviceId = `device-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+      await AsyncStorage.setItem(DEVICE_ID_KEY, deviceId);
+    }
+    return deviceId;
+  } catch (e) {
+    console.warn("storage.getOrCreateDeviceId error:", e);
+    return `device-${Date.now()}`;
+  }
+}
+
 // ─── Token ───
 export async function setToken(token) {
   try {

@@ -1,123 +1,102 @@
 import React from "react";
-import { View, Text, StyleSheet, SafeAreaView, Pressable } from "react-native";
-import { COLORS, FONT_SIZE, RADIUS, SPACING, SHADOW } from "../../theme";
-import { useAuth } from "../../context/AuthContext";
-import { Logo } from "../../components";
+import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import { Ionicons } from "@expo/vector-icons";
+import { COLORS } from "../../theme";
 
-export default function AdminNavigator() {
-  const { user, logout } = useAuth();
+import AdminDashboardScreen from "./AdminDashboardScreen";
+import HostelManagementScreen from "./HostelManagementScreen";
+import AddHostelScreen from "./AddHostelScreen";
+import BlockManagementScreen from "./BlockManagementScreen";
+import AddBlockScreen from "./AddBlockScreen";
+import RoomManagementScreen from "./RoomManagementScreen";
+import AddRoomScreen from "./AddRoomScreen";
+import StudentManagementScreen from "./StudentManagementScreen";
+import AddStudentScreen from "./AddStudentScreen";
+import StudentDetailsScreen from "./StudentDetailsScreen";
+import ChangeRoomScreen from "./ChangeRoomScreen";
+import WardenManagementScreen from "./WardenManagementScreen";
+import AddWardenScreen from "./AddWardenScreen";
+import AdminProfileScreen from "./AdminProfileScreen";
 
+const Tab = createBottomTabNavigator();
+const Stack = createNativeStackNavigator();
+
+function DashboardStack() {
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <Logo size={40} />
-          <View style={styles.headerInfo}>
-            <Text style={styles.headerName}>{user?.name || "Admin"}</Text>
-            <View style={styles.roleBadge}>
-              <Text style={styles.roleText}>ADMIN</Text>
-            </View>
-          </View>
-        </View>
-        <Pressable
-          style={({ pressed }) => [styles.logoutBtn, pressed && { opacity: 0.7 }]}
-          onPress={logout}
-        >
-          <Text style={styles.logoutText}>Logout</Text>
-        </Pressable>
-      </View>
-
-      <View style={styles.center}>
-        <Text style={styles.emoji}>🏢</Text>
-        <Text style={styles.title}>Admin Dashboard</Text>
-        <Text style={styles.subtitle}>Coming Soon</Text>
-        <Text style={styles.description}>
-          Hostel management, student registration, and system administration features will be available here.
-        </Text>
-      </View>
-    </SafeAreaView>
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="DashboardHome" component={AdminDashboardScreen} />
+    </Stack.Navigator>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.bg,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
-    backgroundColor: COLORS.white,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  headerLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: SPACING.md,
-  },
-  headerInfo: {
-    gap: 2,
-  },
-  headerName: {
-    fontSize: FONT_SIZE.lg,
-    fontWeight: "700",
-    color: COLORS.textPrimary,
-  },
-  roleBadge: {
-    backgroundColor: "#ede9fe",
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: RADIUS.full,
-    alignSelf: "flex-start",
-  },
-  roleText: {
-    fontSize: FONT_SIZE.xs,
-    fontWeight: "700",
-    color: "#7c3aed",
-    letterSpacing: 0.5,
-  },
-  logoutBtn: {
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.sm,
-    backgroundColor: COLORS.dangerLight,
-    borderRadius: RADIUS.md,
-  },
-  logoutText: {
-    fontSize: FONT_SIZE.sm,
-    fontWeight: "700",
-    color: COLORS.danger,
-  },
-  center: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: SPACING.xxxl,
-  },
-  emoji: {
-    fontSize: 64,
-    marginBottom: SPACING.xl,
-  },
-  title: {
-    fontSize: FONT_SIZE.xxxl,
-    fontWeight: "900",
-    color: COLORS.textPrimary,
-    marginBottom: SPACING.sm,
-  },
-  subtitle: {
-    fontSize: FONT_SIZE.xl,
-    fontWeight: "600",
-    color: COLORS.primary,
-    marginBottom: SPACING.lg,
-  },
-  description: {
-    fontSize: FONT_SIZE.md,
-    color: COLORS.textSecondary,
-    textAlign: "center",
-    lineHeight: 22,
-    maxWidth: 300,
-  },
-});
+function StudentsStack() {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="StudentList" component={StudentManagementScreen} />
+      <Stack.Screen name="AddStudent" component={AddStudentScreen} />
+      <Stack.Screen name="StudentDetails" component={StudentDetailsScreen} />
+      <Stack.Screen name="ChangeRoom" component={ChangeRoomScreen} />
+    </Stack.Navigator>
+  );
+}
+
+function HostelStack() {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="HostelList" component={HostelManagementScreen} />
+      <Stack.Screen name="AddHostel" component={AddHostelScreen} />
+      <Stack.Screen name="BlockList" component={BlockManagementScreen} />
+      <Stack.Screen name="AddBlock" component={AddBlockScreen} />
+      <Stack.Screen name="RoomList" component={RoomManagementScreen} />
+      <Stack.Screen name="AddRoom" component={AddRoomScreen} />
+    </Stack.Navigator>
+  );
+}
+
+function WardensStack() {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="WardenList" component={WardenManagementScreen} />
+      <Stack.Screen name="AddWarden" component={AddWardenScreen} />
+    </Stack.Navigator>
+  );
+}
+
+function ProfileStack() {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="AdminProfile" component={AdminProfileScreen} />
+    </Stack.Navigator>
+  );
+}
+
+const TAB_ICONS = {
+  Dashboard: "grid",
+  Students: "people",
+  Hostel: "business",
+  Wardens: "shield-checkmark",
+  Profile: "person-circle",
+};
+
+export default function AdminNavigator() {
+  return (
+    <Tab.Navigator
+      screenOptions={({ route }) => ({
+        headerShown: false,
+        tabBarActiveTintColor: COLORS.primary,
+        tabBarInactiveTintColor: COLORS.textMuted,
+        tabBarIcon: ({ color, size }) => (
+          <Ionicons name={TAB_ICONS[route.name]} size={size} color={color} />
+        ),
+        tabBarLabelStyle: { fontSize: 11, fontWeight: "600" },
+      })}
+    >
+      <Tab.Screen name="Dashboard" component={DashboardStack} />
+      <Tab.Screen name="Students" component={StudentsStack} />
+      <Tab.Screen name="Hostel" component={HostelStack} />
+      <Tab.Screen name="Wardens" component={WardensStack} />
+      <Tab.Screen name="Profile" component={ProfileStack} />
+    </Tab.Navigator>
+  );
+}

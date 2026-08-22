@@ -11,3 +11,5 @@ export { default as Modal } from "./Modal";
 export { default as LoadingScreen } from "./LoadingScreen";
 export { default as ErrorView } from "./ErrorView";
 export { default as Logo } from "./Logo";
+export { default as AppSelect } from "./AppSelect";
+export { default as Fab } from "./Fab";
