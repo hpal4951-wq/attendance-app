@@ -122,6 +122,46 @@ const seedData = async () => {
     await Room.findByIdAndUpdate(roomA101._id, { $inc: { occupied: 1 } });
     await User.findByIdAndUpdate(warden._id, { blockId: blockA._id });
 
+    // --- Demo attendance records for the seeded student (today) ---
+    const Attendance = (await import("./models/attendance.model.js")).default;
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, "0");
+    const dd = String(today.getDate()).padStart(2, "0");
+    const todayStr = `${yyyy}-${mm}-${dd}`;
+
+    const existingToday = await Attendance.findOne({ studentId: studentProfile._id, date: todayStr });
+    if (!existingToday) {
+      await Attendance.create({
+        studentId: studentProfile._id,
+        hostelId: hostel._id,
+        date: todayStr,
+        slot: "morning",
+        status: "present",
+        latitude: 28.8387,
+        longitude: 78.7732,
+        accuracy: 10,
+        distanceFromHostel: 15,
+        markedAt: new Date(),
+        source: "auto_location",
+        reason: "Inside hostel radius with valid accuracy",
+      });
+      await Attendance.create({
+        studentId: studentProfile._id,
+        hostelId: hostel._id,
+        date: todayStr,
+        slot: "night",
+        status: "pending",
+        latitude: 28.8387,
+        longitude: 78.7732,
+        accuracy: 95,
+        distanceFromHostel: 45,
+        markedAt: new Date(),
+        source: "auto_location",
+        reason: "Inside radius but accuracy is weak",
+      });
+    }
+
     console.log("Seed completed successfully");
     console.log({
       hostelId: hostel._id,

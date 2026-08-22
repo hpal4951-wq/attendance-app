@@ -4,6 +4,7 @@ import cors from "cors";
 import authRoutes from "./routes/auth.routes.js";
 import attendanceRoutes from "./routes/attendance.routes.js";
 import adminRoutes from "./routes/admin.routes.js";
+import wardenRoutes from "./routes/warden.routes.js";
 
 const app = express();
 
@@ -21,5 +22,6 @@ app.get("/", (req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/attendance", attendanceRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/warden", wardenRoutes);
 
 export default app;

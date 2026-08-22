@@ -13,3 +13,5 @@ export { default as ErrorView } from "./ErrorView";
 export { default as Logo } from "./Logo";
 export { default as AppSelect } from "./AppSelect";
 export { default as Fab } from "./Fab";
+export { default as AttendanceStatus } from "./AttendanceStatus";
+export { default as DatePickerModal } from "./DatePickerModal";

@@ -11,6 +11,18 @@ import {
 } from "../utils/date.js";
 import { decideAttendance } from "../utils/attendanceDecision.js";
 
+// Determines the data scope for attendance listing endpoints.
+// admin → all records; warden → records for the warden's hostel/block only.
+const getAttendanceScope = async (userId) => {
+  const user = await User.findById(userId);
+  if (!user) return null;
+  if (user.role === "admin") return { all: true };
+  if (user.role === "warden") {
+    return { all: false, hostelId: user.hostelId, blockId: user.blockId };
+  }
+  return { all: false, studentSelf: true };
+};
+
 export const autoCheckAttendance = async (req, res) => {
   try {
     const { latitude, longitude, accuracy, slot, deviceId, isMocked = false } =
@@ -217,22 +229,49 @@ export const getAttendanceByDate = async (req, res) => {
       });
     }
 
+    const scope = await getAttendanceScope(req.user.id);
+    if (!scope || scope.studentSelf) {
+      return res.status(403).json({
+        success: false,
+        message: "Forbidden: insufficient permissions",
+      });
+    }
+
     const query = { date };
     if (slot) query.slot = slot;
+
+    if (!scope.all) {
+      const students = scope.blockId
+        ? await StudentProfile.find({ blockId: scope.blockId }).select("_id")
+        : scope.hostelId
+          ? await StudentProfile.find({ hostelId: scope.hostelId }).select("_id")
+          : [];
+      query.studentId = { $in: students.map((s) => s._id) };
+    }
 
     const records = await Attendance.find(query)
       .populate({
         path: "studentId",
-        populate: {
-          path: "userId",
-          select: "name phone",
-        },
+        populate: [
+          { path: "userId", select: "name phone" },
+          { path: "roomId", select: "roomNumber" },
+        ],
       })
       .sort({ createdAt: -1 });
+
+    const summary = { total: 0, present: 0, absent: 0, pending: 0 };
+    records.forEach((r) => {
+      summary.total += 1;
+      if (r.status === "present") summary.present += 1;
+      else if (r.status === "absent") summary.absent += 1;
+      else summary.pending += 1;
+    });
 
     return res.status(200).json({
       success: true,
       count: records.length,
+      summary,
+      date,
       data: records,
     });
   } catch (error) {
@@ -277,13 +316,32 @@ export const getAttendanceSummary = async (req, res) => {
 
 export const getPendingAttendance = async (req, res) => {
   try {
-    const records = await Attendance.find({ status: "pending" })
+    const scope = await getAttendanceScope(req.user.id);
+    if (!scope || scope.studentSelf) {
+      return res.status(403).json({
+        success: false,
+        message: "Forbidden: insufficient permissions",
+      });
+    }
+
+    const query = { status: "pending" };
+
+    if (!scope.all) {
+      const students = scope.blockId
+        ? await StudentProfile.find({ blockId: scope.blockId }).select("_id")
+        : scope.hostelId
+          ? await StudentProfile.find({ hostelId: scope.hostelId }).select("_id")
+          : [];
+      query.studentId = { $in: students.map((s) => s._id) };
+    }
+
+    const records = await Attendance.find(query)
       .populate({
         path: "studentId",
-        populate: {
-          path: "userId",
-          select: "name phone",
-        },
+        populate: [
+          { path: "userId", select: "name phone" },
+          { path: "roomId", select: "roomNumber" },
+        ],
       })
       .sort({ createdAt: -1 });
 

@@ -72,7 +72,9 @@ export const login = async (req, res) => {
 
 export const me = async (req, res) => {
   try {
-    const user = await User.findById(req.user.id).populate("hostelId");
+    const user = await User.findById(req.user.id)
+      .populate("hostelId")
+      .populate("blockId");
 
     return res.status(200).json({
       success: true,
