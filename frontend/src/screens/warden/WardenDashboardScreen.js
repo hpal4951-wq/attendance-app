@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, SafeAreaView, ScrollView, RefreshControl, Press
 import { useNavigation } from "@react-navigation/native";
 import { COLORS, FONT_SIZE, RADIUS, SPACING, SHADOW } from "../../theme";
 import { useAuth } from "../../context/AuthContext";
-import { AppHeader, StatCard, ErrorView, LoadingScreen } from "../../components";
+import { AppHeader, StatCard, ErrorView, LoadingScreen, NotificationBell } from "../../components";
 import wardenService from "../../services/wardenService";
 import { getErrorMessage } from "../../utils/error";
 import { useFetch } from "../../hooks/useFetch";
@@ -39,6 +39,7 @@ export default function WardenDashboardScreen() {
     { label: "Students", icon: "👨‍🎓", onPress: () => navigation.navigate("Students", { screen: "WardenStudentList" }) },
     { label: "Attendance Monitor", icon: "📊", onPress: () => navigation.navigate("Attendance", { screen: "AttendanceMonitor" }) },
     { label: "Pending Attendance", icon: "⏳", onPress: () => navigation.navigate("Attendance", { screen: "PendingAttendance" }) },
+    { label: "Analytics", icon: "📈", onPress: () => navigation.navigate("WardenAnalytics") },
   ];
 
   return (
@@ -47,6 +48,7 @@ export default function WardenDashboardScreen() {
         title={`${getGreeting()}, ${firstName}`}
         subtitle={`${hostelName || "Hostel"}${blockName ? ` · ${blockName}` : ""}`}
         style={styles.header}
+        rightAction={<NotificationBell navigation={navigation} />}
       />
 
       <ScrollView

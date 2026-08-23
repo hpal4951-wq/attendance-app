@@ -1,4 +1,5 @@
 import express from "express";
+import rateLimit from "express-rate-limit";
 import {
   autoCheckAttendance,
   getAttendanceByDate,
@@ -14,8 +15,14 @@ import { allowRoles } from "../middleware/role.middleware.js";
 
 const router = express.Router();
 
+const locationLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  message: { success: false, message: "Too many location verification requests. Try again later." },
+});
+
 // student
-router.post("/verify-location", protect, allowRoles("student"), verifyLocation);
+router.post("/verify-location", locationLimiter, protect, allowRoles("student"), verifyLocation);
 router.get("/today", protect, allowRoles("student"), getTodayAttendance);
 router.post("/auto-check", protect, allowRoles("student"), autoCheckAttendance);
 router.get("/my", protect, allowRoles("student"), getMyAttendance);

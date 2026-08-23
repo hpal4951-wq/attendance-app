@@ -3,8 +3,11 @@ import { View, Text, StyleSheet, SafeAreaView, ScrollView, RefreshControl, Press
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { COLORS, FONT_SIZE, RADIUS, SPACING, SHADOW } from "../../theme";
 import { useAuth } from "../../context/AuthContext";
-import { AppHeader, AppCard, ErrorView, LoadingScreen, AttendanceStatus, AppButton } from "../../components";
+import { AppHeader, AppCard, ErrorView, LoadingScreen, AttendanceStatus, AppButton, NotificationBell, MenuCard } from "../../components";
 import attendanceService from "../../services/attendanceService";
+import analyticsService from "../../services/analyticsService";
+import pollService from "../../services/pollService";
+import menuService from "../../services/menuService";
 import locationService from "../../services/locationService";
 import { getErrorMessage } from "../../utils/error";
 import { useFetch } from "../../hooks/useFetch";
@@ -31,6 +34,12 @@ export default function StudentDashboardScreen() {
     () => attendanceService.getTodayAttendance(),
     []
   );
+  const statsRes = useFetch(() => analyticsService.getStudentAnalytics(), []);
+  const pollsRes = useFetch(() => pollService.getActivePolls(), []);
+  const menuRes = useFetch(() => menuService.getMenu(), []);
+
+  const latestPoll = (pollsRes.data || [])[0] || null;
+  const todayLunch = (menuRes.data?.menu || []).find((m) => m.mealType === "lunch") || null;
 
   const [permissionGranted, setPermissionGranted] = useState(true);
   const [checkingPermission, setCheckingPermission] = useState(true);
@@ -73,6 +82,7 @@ export default function StudentDashboardScreen() {
         title={`${getGreeting()}, ${firstName} 👋`}
         subtitle="Smart Hostel Attendance"
         style={styles.header}
+        rightAction={<NotificationBell navigation={navigation} />}
       />
 
       <ScrollView
@@ -137,6 +147,33 @@ export default function StudentDashboardScreen() {
               ))}
             </AppCard>
 
+            {statsRes.data?.monthlyAttendancePercent != null ? (
+              <AppCard style={styles.metaCard}>
+                <Text style={styles.metaLabel}>Monthly Attendance</Text>
+                <Text style={styles.metaValue}>{statsRes.data.monthlyAttendancePercent}%</Text>
+              </AppCard>
+            ) : null}
+
+            {todayLunch?.items?.length ? (
+              <MenuCard mealType="lunch" items={todayLunch.items} />
+            ) : null}
+
+            {latestPoll ? (
+              <AppCard style={styles.metaCard}>
+                <View style={styles.pollHeader}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.metaLabel}>New Poll</Text>
+                    <Text style={styles.pollQuestion}>{latestPoll.question}</Text>
+                  </View>
+                  <AppButton
+                    title={latestPoll.hasVoted ? "View" : "Vote Now"}
+                    variant="primary"
+                    onPress={() => navigation.navigate("Mess", { screen: "PollDetails", params: { pollId: latestPoll._id } })}
+                  />
+                </View>
+              </AppCard>
+            ) : null}
+
             <Pressable
               style={({ pressed }) => [styles.viewHistoryBtn, pressed && { opacity: 0.85 }]}
               onPress={() => navigation.navigate("History", { screen: "AttendanceHistory" })}
@@ -170,4 +207,7 @@ const styles = StyleSheet.create({
   rowValue: { fontSize: FONT_SIZE.md, fontWeight: "600", color: COLORS.textPrimary, flex: 1, textAlign: "right", marginLeft: SPACING.md },
   viewHistoryBtn: { paddingVertical: 12, borderRadius: RADIUS.md, backgroundColor: COLORS.primaryLight, alignItems: "center" },
   viewHistoryText: { fontSize: FONT_SIZE.md, fontWeight: "700", color: COLORS.primary },
+  metaCard: { padding: 16, marginBottom: 12 },
+  pollHeader: { flexDirection: "row", alignItems: "center", gap: 12 },
+  pollQuestion: { fontSize: 14, fontWeight: "600", color: COLORS.textPrimary, marginTop: 4 },
 });

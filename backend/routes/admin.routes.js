@@ -18,6 +18,10 @@ import {
   getWardens,
   createWarden,
 } from "../controllers/admin.controller.js";
+import { listPolls } from "../controllers/poll.controller.js";
+import { getAllSuggestions, updateSuggestionStatus } from "../controllers/suggestion.controller.js";
+import { getAdminOverview, getAdminAttendanceAnalytics, getAdminMessAnalytics, getAdminLowAttendance } from "../controllers/analytics.controller.js";
+import { getAuditLogs } from "../controllers/audit.controller.js";
 
 const router = express.Router();
 
@@ -44,5 +48,17 @@ router.patch("/students/:id", updateStudent);
 
 router.get("/staff", getWardens);
 router.post("/staff", createWarden);
+
+// Mess module
+router.get("/polls", listPolls);
+router.get("/suggestions", getAllSuggestions);
+router.patch("/suggestions/:id/status", updateSuggestionStatus);
+
+// Analytics + audit
+router.get("/analytics/overview", getAdminOverview);
+router.get("/analytics/attendance", getAdminAttendanceAnalytics);
+router.get("/analytics/mess", getAdminMessAnalytics);
+router.get("/analytics/low-attendance", getAdminLowAttendance);
+router.get("/audit", getAuditLogs);
 
 export default router;

@@ -10,6 +10,8 @@ import {
   isTimeInRange,
 } from "../utils/date.js";
 import { decideAttendance } from "../utils/attendanceDecision.js";
+import { createNotification } from "./notification.controller.js";
+import { logAudit } from "../utils/audit.js";
 
 // Determines the data scope for attendance listing endpoints.
 // admin → all records; warden → records for the warden's hostel/block only.
@@ -294,6 +296,18 @@ export const verifyLocation = async (req, res) => {
         { upsert: true, new: true }
       );
     }
+
+    // Meaningful, non-spammy notification on the attendance status
+    const notifMap = {
+      present: ["Attendance verified", "Attendance verified successfully."],
+      outside_hostel: ["Outside hostel area", "Your location was outside the allowed hostel area."],
+      location_unavailable: ["Attendance not verified", "Attendance could not be verified because location was unavailable."],
+    };
+    const notif = notifMap[status];
+    if (notif) {
+      createNotification({ userId: req.user.id, title: notif[0], message: notif[1], type: "attendance", data: { status, date: getTodayDateString() } });
+    }
+    logAudit({ userId: req.user.id, action: "ATTENDANCE_VERIFIED", entity: "Attendance", metadata: { status, distance }, req });
 
     return res.status(200).json({
       success: true,

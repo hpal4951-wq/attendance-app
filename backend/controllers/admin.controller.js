@@ -5,6 +5,7 @@ import StudentProfile from "../models/studentProfile.model.js";
 import Hostel from "../models/hostel.model.js";
 import Block from "../models/block.model.js";
 import Room from "../models/room.model.js";
+import { logAudit } from "../utils/audit.js";
 
 const STUDENT_POPULATE = [
   { path: "userId", select: "name phone email isActive" },
@@ -146,6 +147,8 @@ export const createHostel = async (req, res) => {
       radiusMeters: Number(radius),
     });
 
+    logAudit({ userId: req.user.id, action: "HOSTEL_CREATED", entity: "Hostel", entityId: hostel._id, metadata: { name: hostel.name }, req });
+
     return res.status(201).json({
       success: true,
       message: "Hostel created successfully",
@@ -213,6 +216,7 @@ export const createBlock = async (req, res) => {
       floors: floorCount,
     });
 
+    logAudit({ userId: req.user.id, action: "BLOCK_CREATED", entity: "Block", entityId: block._id, metadata: { name: block.name, hostelId }, req });
     return res.status(201).json({
       success: true,
       message: "Block created successfully",
@@ -225,8 +229,6 @@ export const createBlock = async (req, res) => {
     return serverError(res, error);
   }
 };
-
-// ─── Rooms ─────────────────────────────────────────────────
 export const getRooms = async (req, res) => {
   try {
     const { blockId, hostelId } = req.query;
@@ -425,6 +427,8 @@ export const createStudent = async (req, res) => {
     const populated = await StudentProfile.findById(student._id).populate(
       STUDENT_POPULATE
     );
+
+    logAudit({ userId: req.user.id, action: "STUDENT_CREATED", entity: "StudentProfile", entityId: student._id, metadata: { name, studentId }, req });
 
     return res.status(201).json({
       success: true,
@@ -631,6 +635,8 @@ export const createWarden = async (req, res) => {
       hostelId: hostelId || null,
       blockId: blockId || null,
     });
+
+    logAudit({ userId: req.user.id, action: "WARDEN_CREATED", entity: "User", entityId: warden._id, metadata: { name, phone }, req });
 
     return res.status(201).json({
       success: true,

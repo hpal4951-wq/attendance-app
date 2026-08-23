@@ -10,6 +10,13 @@ import WardenStudentDetailsScreen from "./WardenStudentDetailsScreen";
 import AttendanceMonitorScreen from "./AttendanceMonitorScreen";
 import PendingAttendanceScreen from "./PendingAttendanceScreen";
 import WardenProfileScreen from "./WardenProfileScreen";
+import WardenMessScreen from "./mess/WardenMessScreen";
+import WardenPollResultsScreen from "./mess/WardenPollResultsScreen";
+import WardenSuggestionScreen from "./mess/WardenSuggestionScreen";
+import WardenAnalyticsScreen from "./WardenAnalyticsScreen";
+import NotificationsScreen from "../common/NotificationsScreen";
+import HelpScreen from "../common/HelpScreen";
+import AboutScreen from "../common/AboutScreen";
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -18,6 +25,10 @@ function DashboardStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="WardenDashboard" component={WardenDashboardScreen} />
+      <Stack.Screen name="Notifications" component={NotificationsScreen} />
+      <Stack.Screen name="Help" component={HelpScreen} />
+      <Stack.Screen name="About" component={AboutScreen} />
+      <Stack.Screen name="WardenAnalytics" component={WardenAnalyticsScreen} />
     </Stack.Navigator>
   );
 }
@@ -48,10 +59,21 @@ function ProfileStack() {
   );
 }
 
+function MessStack() {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="WardenMess" component={WardenMessScreen} />
+      <Stack.Screen name="WardenPollResults" component={WardenPollResultsScreen} />
+      <Stack.Screen name="WardenSuggestion" component={WardenSuggestionScreen} />
+    </Stack.Navigator>
+  );
+}
+
 const TAB_ICONS = {
   Dashboard: "grid",
   Students: "people",
   Attendance: "checkmark-circle",
+  Mess: "restaurant",
   Profile: "person-circle",
 };
 
@@ -71,6 +93,7 @@ export default function WardenNavigator() {
       <Tab.Screen name="Dashboard" component={DashboardStack} />
       <Tab.Screen name="Students" component={StudentsStack} />
       <Tab.Screen name="Attendance" component={AttendanceStack} />
+      <Tab.Screen name="Mess" component={MessStack} />
       <Tab.Screen name="Profile" component={ProfileStack} />
     </Tab.Navigator>
   );

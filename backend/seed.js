@@ -7,6 +7,10 @@ import User from "./models/user.model.js";
 import StudentProfile from "./models/studentProfile.model.js";
 import Block from "./models/block.model.js";
 import Room from "./models/room.model.js";
+import Menu from "./models/menu.model.js";
+import Poll from "./models/poll.model.js";
+import Vote from "./models/vote.model.js";
+import Suggestion from "./models/suggestion.model.js";
 
 dotenv.config();
 
@@ -21,6 +25,10 @@ const seedData = async () => {
       StudentProfile.deleteMany({}),
       Block.deleteMany({}),
       Room.deleteMany({}),
+      Menu.deleteMany({}),
+      Poll.deleteMany({}),
+      Vote.deleteMany({}),
+      Suggestion.deleteMany({}),
     ]);
 
     const hostel = await Hostel.create({
@@ -170,6 +178,56 @@ const seedData = async () => {
       studentUserId: studentUser._id,
       studentProfileId: studentProfile._id,
     });
+
+    // --- Mess module demo data: menu, polls, suggestions ---
+    await Menu.create([
+      { date: todayStr, mealType: "breakfast", items: ["Poha", "Milk", "Banana"] },
+      { date: todayStr, mealType: "lunch", items: ["Dal", "Rice", "Roti", "Aloo Gobi"] },
+      { date: todayStr, mealType: "snacks", items: ["Tea", "Samosa"] },
+      { date: todayStr, mealType: "dinner", items: ["Paneer", "Dal", "Rice", "Salad"] },
+    ]);
+
+    const activePoll = await Poll.create({
+      question: "Which vegetable should be added next week?",
+      description: "Choose your preferred vegetable for next week's menu.",
+      type: "single_choice",
+      options: ["Aloo Gobi", "Bhindi", "Mix Veg", "Palak Paneer"].map((text) => ({ text, votes: 0 })),
+      startAt: new Date(Date.now() - 86400000),
+      endAt: new Date(Date.now() + 3 * 86400000),
+      closed: false,
+      createdBy: admin._id,
+    });
+
+    const closedPoll = await Poll.create({
+      question: "Which evening snack do you prefer?",
+      description: "Choose your favourite evening snack.",
+      type: "single_choice",
+      options: ["Samosa", "Poha", "Sandwich"].map((text) => ({ text, votes: 0 })),
+      startAt: new Date(Date.now() - 7 * 86400000),
+      endAt: new Date(Date.now() - 1 * 86400000),
+      closed: true,
+      createdBy: admin._id,
+    });
+
+    await Vote.create({
+      pollId: closedPoll._id,
+      studentId: studentProfile._id,
+      optionIds: [closedPoll.options[0]._id],
+    });
+    await Poll.updateOne(
+      { _id: closedPoll._id, "options._id": closedPoll.options[0]._id },
+      { $inc: { "options.$.votes": 1 } }
+    );
+
+    await Suggestion.create({
+      studentId: studentProfile._id,
+      type: "vegetable",
+      title: "Bhindi Masala",
+      description: "Please include this once next week.",
+      status: "under_review",
+    });
+
+    console.log("Mess demo data created");
 
     process.exit(0);
   } catch (error) {

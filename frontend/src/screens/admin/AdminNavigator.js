@@ -18,6 +18,21 @@ import ChangeRoomScreen from "./ChangeRoomScreen";
 import WardenManagementScreen from "./WardenManagementScreen";
 import AddWardenScreen from "./AddWardenScreen";
 import AdminProfileScreen from "./AdminProfileScreen";
+import MessManagementScreen from "./mess/MessManagementScreen";
+import CreatePollScreen from "./mess/CreatePollScreen";
+import AdminPollListScreen from "./mess/AdminPollListScreen";
+import AdminPollResultsScreen from "./mess/AdminPollResultsScreen";
+import MenuManagementScreen from "./mess/MenuManagementScreen";
+import SuggestionManagementScreen from "./mess/SuggestionManagementScreen";
+import AdminAnalyticsScreen from "./analytics/AdminAnalyticsScreen";
+import AttendanceAnalyticsScreen from "./analytics/AttendanceAnalyticsScreen";
+import MessAnalyticsScreen from "./analytics/MessAnalyticsScreen";
+import StudentAnalyticsScreen from "./analytics/StudentAnalyticsScreen";
+import LowAttendanceStudentsScreen from "./analytics/LowAttendanceStudentsScreen";
+import AdminAuditLogScreen from "./AdminAuditLogScreen";
+import NotificationsScreen from "../common/NotificationsScreen";
+import HelpScreen from "../common/HelpScreen";
+import AboutScreen from "../common/AboutScreen";
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -26,6 +41,15 @@ function DashboardStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="DashboardHome" component={AdminDashboardScreen} />
+      <Stack.Screen name="Notifications" component={NotificationsScreen} />
+      <Stack.Screen name="Help" component={HelpScreen} />
+      <Stack.Screen name="About" component={AboutScreen} />
+      <Stack.Screen name="AdminAnalytics" component={AdminAnalyticsScreen} />
+      <Stack.Screen name="AttendanceAnalytics" component={AttendanceAnalyticsScreen} />
+      <Stack.Screen name="MessAnalytics" component={MessAnalyticsScreen} />
+      <Stack.Screen name="StudentAnalytics" component={StudentAnalyticsScreen} />
+      <Stack.Screen name="LowAttendance" component={LowAttendanceStudentsScreen} />
+      <Stack.Screen name="AuditLogs" component={AdminAuditLogScreen} />
     </Stack.Navigator>
   );
 }
@@ -71,11 +95,25 @@ function ProfileStack() {
   );
 }
 
+function MessStack() {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="MessManagement" component={MessManagementScreen} />
+      <Stack.Screen name="CreatePoll" component={CreatePollScreen} />
+      <Stack.Screen name="AdminPollList" component={AdminPollListScreen} />
+      <Stack.Screen name="AdminPollResults" component={AdminPollResultsScreen} />
+      <Stack.Screen name="MenuManagement" component={MenuManagementScreen} />
+      <Stack.Screen name="SuggestionManagement" component={SuggestionManagementScreen} />
+    </Stack.Navigator>
+  );
+}
+
 const TAB_ICONS = {
   Dashboard: "grid",
   Students: "people",
   Hostel: "business",
   Wardens: "shield-checkmark",
+  Mess: "restaurant",
   Profile: "person-circle",
 };
 
@@ -96,6 +134,7 @@ export default function AdminNavigator() {
       <Tab.Screen name="Students" component={StudentsStack} />
       <Tab.Screen name="Hostel" component={HostelStack} />
       <Tab.Screen name="Wardens" component={WardensStack} />
+      <Tab.Screen name="Mess" component={MessStack} />
       <Tab.Screen name="Profile" component={ProfileStack} />
     </Tab.Navigator>
   );

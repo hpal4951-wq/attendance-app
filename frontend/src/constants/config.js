@@ -24,7 +24,9 @@ function resolveHost() {
   return "localhost";
 }
 
-export const API_BASE_URL = `http://${resolveHost()}:${API_PORT}/api`;
+// Optional env override (see .env.example): EXPO_PUBLIC_API_BASE_URL
+const envUrl = process.env.EXPO_PUBLIC_API_BASE_URL;
+export const API_BASE_URL = envUrl || `http://${resolveHost()}:${API_PORT}/api`;
 
 /**
  * DEV-ONLY: shows a "Test Location" section in the Attendance screen

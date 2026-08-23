@@ -1,6 +1,7 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import User from "../models/user.model.js";
+import { logAudit } from "../utils/audit.js";
 
 const generateToken = (user) => {
   return jwt.sign(
@@ -26,6 +27,7 @@ export const login = async (req, res) => {
 
     const user = await User.findOne({ phone });
     if (!user) {
+      await logAudit({ action: "LOGIN_FAILED", entity: "User", metadata: { phone }, req });
       return res.status(404).json({
         success: false,
         message: "User not found",
@@ -53,6 +55,8 @@ export const login = async (req, res) => {
     }
 
     const token = generateToken(user);
+
+    logAudit({ userId: user._id, action: "LOGIN_SUCCESS", entity: "User", entityId: user._id, metadata: { role: user.role, phone }, req });
 
     return res.status(200).json({
       success: true,

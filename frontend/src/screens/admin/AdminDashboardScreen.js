@@ -18,6 +18,7 @@ import {
   EmptyState,
   ErrorView,
   LoadingScreen,
+  NotificationBell,
 } from "../../components";
 import adminService from "../../services/adminService";
 import { getErrorMessage } from "../../utils/error";
@@ -54,10 +55,14 @@ export default function AdminDashboardScreen() {
     { label: "Add Warden", icon: "🛡️", screen: "Wardens" },
     { label: "Add Hostel", icon: "🏢", screen: "Hostel" },
     { label: "Manage Rooms", icon: "🚪", screen: "Hostel" },
+    { label: "Analytics", icon: "📊", screen: "AdminAnalytics" },
+    { label: "Audit Logs", icon: "📜", screen: "AuditLogs" },
   ];
 
   const handleQuickAction = (action) => {
-    if (action.label === "Add Student") {
+    if (action.screen === "AdminAnalytics" || action.screen === "AuditLogs") {
+      navigation.navigate(action.screen);
+    } else if (action.label === "Add Student") {
       navigation.navigate("Students", { screen: "AddStudent" });
     } else if (action.label === "Add Warden") {
       navigation.navigate("Wardens", { screen: "AddWarden" });
@@ -74,6 +79,7 @@ export default function AdminDashboardScreen() {
         title={`${getGreeting()}, ${firstName}`}
         subtitle="Manage your hostel efficiently"
         style={styles.header}
+        rightAction={<NotificationBell navigation={navigation} />}
       />
 
       <ScrollView
