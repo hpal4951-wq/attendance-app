@@ -2,8 +2,8 @@ import Menu from "../models/menu.model.js";
 import User from "../models/user.model.js";
 import StudentProfile from "../models/studentProfile.model.js";
 import { getTodayDateString, shiftDate } from "../utils/date.js";
+import { notifyHostelStudents } from "../services/notification.service.js";
 import { logAudit } from "../utils/audit.js";
-import { notifyAllStudents } from "../utils/notify.js";
 
 const badRequest = (res, msg) => res.status(400).json({ success: false, message: msg });
 const notFound = (res, msg = "Menu not found") => res.status(404).json({ success: false, message: msg });
@@ -33,7 +33,8 @@ export const getMenu = async (req, res) => {
     const date = req.query.date || getTodayDateString();
     const scopeHostel = await getScopeHostel(req);
     const query = { date };
-    if (scopeHostel) query.hostelId = scopeHostel;
+    // Students see their hostel's menus plus any global (hostelId null) menus.
+    if (scopeHostel) query.hostelId = { $in: [scopeHostel, null] };
     if (req.user.role === "student") query.status = "published";
 
     const menus = await Menu.find(query);
@@ -58,7 +59,7 @@ export const getWeeklyMenu = async (req, res) => {
     for (let i = 0; i < 7; i++) days.push(shiftDate(today, i));
     const scopeHostel = await getScopeHostel(req);
     const query = { date: { $in: days } };
-    if (scopeHostel) query.hostelId = scopeHostel;
+    if (scopeHostel) query.hostelId = { $in: [scopeHostel, null] };
     if (req.user.role === "student") query.status = "published";
 
     const menus = await Menu.find(query);
@@ -107,12 +108,15 @@ export const createMenu = async (req, res) => {
     );
 
     logAudit({ userId: req.user.id, action: "MENU_UPDATED", entity: "Menu", entityId: menu._id, metadata: { date, mealType, hostelId }, req });
+    // Notify only the relevant hostel's students when a menu is published.
     if (cleanStatus === "published") {
-      notifyAllStudents({
-        title: "Mess menu updated",
-        message: `${date} ${mealType} menu has been updated.`,
+      await notifyHostelStudents({
+        hostelId: hostelId || null,
+        title: "New Mess Menu",
+        message: `${date} ${mealType} menu is now available.`,
         type: "mess",
-        data: { date, mealType, hostelId },
+        data: { date, mealType, hostelId: hostelId || null, channelId: "mess" },
+        dedupKey: `mess_menu:${hostelId || "global"}:${date}:${mealType}`,
       });
     }
     return res.status(201).json({ success: true, message: "Menu saved successfully", data: menu });

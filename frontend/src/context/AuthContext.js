@@ -2,6 +2,7 @@ import React, { createContext, useState, useEffect, useCallback, useContext } fr
 import { getToken, clearAuth } from "../utils/storage";
 import { loginUser as loginAPI, getCurrentUser as getMe } from "../services/authService";
 import { setOnUnauthorized } from "../services/api";
+import pushService from "../services/pushService";
 
 const AuthContext = createContext(null);
 
@@ -42,6 +43,8 @@ export function AuthProvider({ children }) {
       if (res.success && res.data) {
         setTokenState(storedToken);
         setUserState(res.data);
+        // Re-register the device token under the restored user.
+        pushService.registerForPush();
       } else {
         await clearAuth();
       }
@@ -62,12 +65,17 @@ export function AuthProvider({ children }) {
     if (res.success && res.token) {
       setTokenState(res.token);
       setUserState(res.user);
+      // Register the device for push under the newly authenticated user.
+      pushService.registerForPush();
     }
     return res;
   }, []);
 
   // ─── Logout — clears storage + state, the AppNavigator reacts ───
   const logout = useCallback(async () => {
+    // Deactivate the device token so the next user on this device never
+    // receives the previous user's private notifications.
+    await pushService.removePushToken();
     await clearAuth();
     setTokenState(null);
     setUserState(null);

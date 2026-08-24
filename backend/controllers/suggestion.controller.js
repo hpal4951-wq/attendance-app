@@ -1,7 +1,7 @@
 import Suggestion from "../models/suggestion.model.js";
 import User from "../models/user.model.js";
 import StudentProfile from "../models/studentProfile.model.js";
-import { createNotification } from "./notification.controller.js";
+import { notifyHostelStaff, notifyUser } from "../services/notification.service.js";
 import { logAudit } from "../utils/audit.js";
 
 const badRequest = (res, msg) => res.status(400).json({ success: false, message: msg });
@@ -41,6 +41,17 @@ export const createSuggestion = async (req, res) => {
       title: String(title).trim(),
       description: description ? String(description).trim() : null,
     });
+
+    // Alert the hostel's warden/admin that a new suggestion was submitted.
+    await notifyHostelStaff({
+      hostelId: student.hostelId || null,
+      title: "New Food Suggestion",
+      message: `A new ${cleanType} suggestion has been submitted.`,
+      type: "mess",
+      data: { suggestionId: suggestion._id, channelId: "mess" },
+      dedupKey: `food_suggestion:${suggestion._id}`,
+    });
+
     return res.status(201).json({ success: true, message: "Suggestion submitted successfully", data: suggestion });
   } catch (e) { return serverError(res, e); }
 };
@@ -94,16 +105,17 @@ export const updateSuggestionStatus = async (req, res) => {
     if (response !== undefined) update.adminResponse = String(response).trim() || null;
     const updated = await Suggestion.findByIdAndUpdate(suggestion._id, update, { new: true });
 
-    // Notify the submitting student about the status change
+    // Notify the submitting student about the status change (in-app + push).
     try {
       const profile = await StudentProfile.findById(updated.studentId).populate({ path: "userId", select: "_id" });
       if (profile?.userId?._id) {
-        await createNotification({
+        await notifyUser({
           userId: profile.userId._id,
           title: `Suggestion ${status}`,
           message: `Your suggestion "${updated.title}" is now ${status.replace("_", " ")}.`,
           type: "mess",
-          data: { suggestionId: updated._id },
+          data: { suggestionId: updated._id, channelId: "mess" },
+          dedupKey: `suggestion_status:${updated._id}:${status}`,
         });
       }
     } catch (e) {

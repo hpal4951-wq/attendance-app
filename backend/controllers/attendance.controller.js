@@ -12,7 +12,7 @@ import {
   isTimeInRange,
 } from "../utils/date.js";
 import { decideAttendance } from "../utils/attendanceDecision.js";
-import { createNotification } from "./notification.controller.js";
+import { notifyUser } from "../services/notification.service.js";
 import { logAudit } from "../utils/audit.js";
 
 const MAX_ACCEPTABLE_ACCURACY = ATTENDANCE_CONFIG.maxAcceptableAccuracy;
@@ -397,17 +397,26 @@ export const verifyLocation = async (req, res) => {
       }
     }
 
-    // Non-spammy notification — only when a fresh record is persisted.
-    if (attendanceMarked || (!alreadyRecorded && status !== "present")) {
-      const notifMap = {
-        present: ["Attendance verified", "Attendance verified successfully."],
-        outside_hostel: ["Outside hostel area", "Your location was outside the allowed hostel area."],
-        location_unavailable: ["Attendance not verified", "Attendance could not be verified because location was unavailable."],
-      };
-      const notif = notifMap[status];
-      if (notif) {
-        createNotification({ userId: req.user.id, title: notif[0], message: notif[1], type: "attendance", data: { status, date } });
-      }
+    // Push notifications — only for meaningful, newly-created events.
+    // Dedup keys prevent re-notification on every dashboard open / retry.
+    if (attendanceMarked) {
+      await notifyUser({
+        userId: req.user.id,
+        title: "Attendance Verified",
+        message: "Your hostel attendance has been automatically verified.",
+        type: "attendance",
+        data: { status: "present", date, slot, channelId: "attendance" },
+        dedupKey: `attendance:${date}:${slot}:present`,
+      });
+    } else if (!alreadyRecorded && status === "outside_hostel") {
+      await notifyUser({
+        userId: req.user.id,
+        title: "Attendance Not Verified",
+        message: "Your current location could not be verified inside the hostel boundary.",
+        type: "attendance",
+        data: { status: "outside_hostel", date, slot, channelId: "attendance" },
+        dedupKey: `attendance:${date}:${slot}:outside`,
+      });
     }
     logAudit({ userId: req.user.id, action: "ATTENDANCE_VERIFIED", entity: "Attendance", metadata: { status, distance, code }, req });
 

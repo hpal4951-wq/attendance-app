@@ -14,8 +14,8 @@ import { Platform } from "react-native";
  *      `ifconfig` on macOS/Linux to find it)
  *   3. Keep your phone on the same WiFi as your PC
  */
-const PC_IP = "192.168.1.100";
-const USE_PC_IP = false;
+const PC_IP = "192.168.25.202"; // PC's Wi-Fi LAN IP (run ipconfig to confirm)
+const USE_PC_IP = true; // true = use PC_IP for a physical device
 const API_PORT = 5000;
 
 function resolveHost() {

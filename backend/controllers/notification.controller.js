@@ -18,14 +18,18 @@ export const createNotification = async ({ userId, title, message, type = "syste
 };
 
 // ─── Device token ───────────────────────────────────────────
+// A device may be reused across users (logout → login as someone else).
+// The latest authenticated user always owns the token, so ownership is
+// reassigned here. Duplicate records for the same token never occur (unique
+// index on `token`), and previously inactive tokens are reactivated.
 export const registerDeviceToken = async (req, res) => {
   try {
     const { token, platform } = req.body;
     if (!token) return badRequest(res, "Token is required");
     await DeviceToken.findOneAndUpdate(
       { token },
-      { user: req.user.id, token, platform: platform || "web", lastUsedAt: new Date() },
-      { upsert: true, new: true }
+      { user: req.user.id, token, platform: platform || "android", isActive: true, lastUsedAt: new Date() },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
     );
     return res.status(200).json({ success: true, message: "Device token registered" });
   } catch (e) { return serverError(res, e); }
@@ -35,7 +39,8 @@ export const removeDeviceToken = async (req, res) => {
   try {
     const { token } = req.body;
     if (!token) return badRequest(res, "Token is required");
-    await DeviceToken.deleteOne({ token, user: req.user.id });
+    // Deactivate rather than hard-delete so a stale token is never re-sent to.
+    await DeviceToken.updateOne({ token, user: req.user.id }, { isActive: false });
     return res.status(200).json({ success: true, message: "Device token removed" });
   } catch (e) { return serverError(res, e); }
 };

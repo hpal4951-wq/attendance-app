@@ -12,6 +12,19 @@
         {
           "locationWhenInUsePermission": "HostelConnect uses your location to automatically verify your presence at the hostel."
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#2563eb",
+          "defaultChannel": "general",
+          "channels": [
+            { "id": "attendance", "name": "Attendance", "importance": 4 },
+            { "id": "mess", "name": "Mess Menu", "importance": 3 },
+            { "id": "polls", "name": "Polls", "importance": 3 },
+            { "id": "general", "name": "General", "importance": 3 }
+          ]
+        }
       ]
     ],
     "ios": {

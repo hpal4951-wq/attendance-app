@@ -17,6 +17,10 @@ const deviceTokenSchema = new mongoose.Schema(
       enum: ["android", "ios", "web"],
       default: "android",
     },
+    isActive: {
+      type: Boolean,
+      default: true,
+    },
     lastUsedAt: {
       type: Date,
       default: Date.now,
@@ -25,7 +29,7 @@ const deviceTokenSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-deviceTokenSchema.index({ user: 1 });
+deviceTokenSchema.index({ user: 1, isActive: 1 });
 
 const DeviceToken = mongoose.model("DeviceToken", deviceTokenSchema);
 export default DeviceToken;

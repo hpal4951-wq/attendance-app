@@ -2,8 +2,8 @@ import Poll from "../models/poll.model.js";
 import Vote from "../models/vote.model.js";
 import User from "../models/user.model.js";
 import StudentProfile from "../models/studentProfile.model.js";
+import { notifyPollEligible } from "../services/notification.service.js";
 import { logAudit } from "../utils/audit.js";
-import { notifyAllStudents } from "../utils/notify.js";
 
 const badRequest = (res, msg) => res.status(400).json({ success: false, message: msg });
 const notFound = (res, msg = "Poll not found") => res.status(404).json({ success: false, message: msg });
@@ -244,11 +244,12 @@ export const createPoll = async (req, res) => {
     });
 
     logAudit({ userId: req.user.id, action: "POLL_CREATED", entity: "Poll", entityId: poll._id, metadata: { question: poll.question, hostelId: targetHostelId }, req });
-    notifyAllStudents({
+    // Notify only eligible students (poll hostel, or all when global).
+    await notifyPollEligible({
+      poll,
       title: "New Mess Poll",
       message: poll.question,
-      type: "poll",
-      data: { pollId: poll._id },
+      dedupKey: `mess_poll:${poll._id}`,
     });
     return res.status(201).json({ success: true, message: "Poll created successfully", data: serializePoll(poll) });
   } catch (e) { return serverError(res, e); }
