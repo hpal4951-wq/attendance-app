@@ -4,7 +4,10 @@ import { useNavigation } from "@react-navigation/native";
 import { COLORS, FONT_SIZE, RADIUS, SPACING } from "../../../theme";
 import { AppHeader, AppInput, AppButton, AppSelect, DatePickerModal } from "../../../components";
 import pollService from "../../../services/pollService";
+import adminService from "../../../services/adminService";
+import { useAuth } from "../../../context/AuthContext";
 import { getErrorMessage } from "../../../utils/error";
+import { useFetch } from "../../../hooks/useFetch";
 
 const POLL_TYPES = [
   { value: "single_choice", label: "Single Choice" },
@@ -15,6 +18,8 @@ const POLL_TYPES = [
 
 export default function CreatePollScreen() {
   const navigation = useNavigation();
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
   const [question, setQuestion] = useState("");
   const [description, setDescription] = useState("");
   const [type, setType] = useState("single_choice");
@@ -23,8 +28,18 @@ export default function CreatePollScreen() {
   const [endPicker, setEndPicker] = useState(false);
   const [startAt, setStartAt] = useState("");
   const [endAt, setEndAt] = useState("");
+  const [hostelId, setHostelId] = useState("");
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
+
+  const hostelsRes = useFetch(
+    () => (isAdmin ? adminService.getHostels() : Promise.resolve({ data: [] })),
+    [isAdmin]
+  );
+  const hostels = hostelsRes.data || [];
+  const hostelOptions = hostels.map((h) => ({ value: h._id, label: h.name }));
+  // Warden polls are scoped by the backend to the warden's assigned hostel.
+  const selectedHostelId = isAdmin ? (hostelId || hostels[0]?._id || "") : "";
 
   const addOption = () => setOptions([...options, ""]);
   const removeOption = (i) => { if (options.length > 2) setOptions(options.filter((_, idx) => idx !== i)); };
@@ -48,6 +63,7 @@ export default function CreatePollScreen() {
         question: question.trim(),
         description: description.trim() || undefined,
         type,
+        hostelId: selectedHostelId || undefined,
         options: type === "yes_no" ? ["Yes", "No"] : clean,
         startAt: startAt ? `${startAt}T00:00:00Z` : undefined,
         endAt: endAt ? `${endAt}T23:59:59Z` : undefined,
@@ -69,6 +85,7 @@ export default function CreatePollScreen() {
           <AppInput label="Question" placeholder="e.g. Which vegetable should be added?" value={question} onChangeText={setQuestion} error={errors.question} />
           <AppInput label="Description (optional)" placeholder="e.g. Choose your preferred vegetable." value={description} onChangeText={setDescription} />
           <AppSelect label="Poll Type" value={type} options={POLL_TYPES} onChange={setType} />
+          {isAdmin ? <AppSelect label="Hostel" value={selectedHostelId} options={hostelOptions} onChange={setHostelId} /> : null}
 
           {type !== "yes_no" ? (
             <View style={styles.optionsSection}>

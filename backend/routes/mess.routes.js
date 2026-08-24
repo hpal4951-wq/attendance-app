@@ -1,14 +1,17 @@
 import express from "express";
 import { protect } from "../middleware/auth.middleware.js";
 import { allowRoles } from "../middleware/role.middleware.js";
-import { getMenu, getWeeklyMenu, createMenu, updateMenu, deleteMenu } from "../controllers/mess.controller.js";
+import { getMenu, getTodayMenu, getWeeklyMenu, createMenu, updateMenu, deleteMenu } from "../controllers/mess.controller.js";
 
 const router = express.Router();
 
-router.get("/menu", protect, allowRoles("admin", "warden", "student"), getMenu);
-router.get("/menu/weekly", protect, allowRoles("admin", "warden", "student"), getWeeklyMenu);
-router.post("/menu", protect, allowRoles("admin"), createMenu);
-router.patch("/menu/:id", protect, allowRoles("admin"), updateMenu);
-router.delete("/menu/:id", protect, allowRoles("admin"), deleteMenu);
+router.use(protect);
+
+router.get("/menu/today", allowRoles("admin", "warden", "student"), getTodayMenu);
+router.get("/menu/weekly", allowRoles("admin", "warden", "student"), getWeeklyMenu);
+router.get("/menu", allowRoles("admin", "warden", "student"), getMenu);
+router.post("/menu", allowRoles("admin", "warden"), createMenu);
+router.patch("/menu/:id", allowRoles("admin", "warden"), updateMenu);
+router.delete("/menu/:id", allowRoles("admin", "warden"), deleteMenu);
 
 export default router;

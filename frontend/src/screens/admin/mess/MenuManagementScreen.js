@@ -5,6 +5,8 @@ import { COLORS, FONT_SIZE, RADIUS, SPACING } from "../../../theme";
 import { AppHeader, AppCard, AppButton, AppInput, AppSelect, MenuCard, EmptyState, ErrorView, LoadingScreen } from "../../../components";
 import { DatePickerModal } from "../../../components";
 import menuService from "../../../services/menuService";
+import adminService from "../../../services/adminService";
+import { useAuth } from "../../../context/AuthContext";
 import { getErrorMessage } from "../../../utils/error";
 import { useFetch, useFocusReload } from "../../../hooks/useFetch";
 import { getTodayDateString, formatDate } from "../../../utils/date";
@@ -18,13 +20,28 @@ const MEAL_TYPES = [
 
 export default function MenuManagementScreen() {
   const navigation = useNavigation();
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
   const [date, setDate] = useState(getTodayDateString());
   const [pickerVisible, setPickerVisible] = useState(false);
   const [mealType, setMealType] = useState("breakfast");
   const [items, setItems] = useState("");
+  const [hostelId, setHostelId] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  const { data: menuData, loading, error, refresh, refreshing, reload } = useFetch(() => menuService.getMenu(date), [date]);
+  const hostelsRes = useFetch(
+    () => (isAdmin ? adminService.getHostels() : Promise.resolve({ data: [] })),
+    [isAdmin]
+  );
+  const hostels = hostelsRes.data || [];
+  const hostelOptions = hostels.map((h) => ({ value: h._id, label: h.name }));
+  // Warden menus are scoped by the backend to the warden's assigned hostel.
+  const selectedHostelId = isAdmin ? (hostelId || hostels[0]?._id || "") : "";
+
+  const { data: menuData, loading, error, refresh, refreshing, reload } = useFetch(
+    () => menuService.getMenu(date, selectedHostelId),
+    [date, selectedHostelId]
+  );
   useFocusReload(reload);
 
   const menu = menuData?.menu || [];
@@ -34,7 +51,13 @@ export default function MenuManagementScreen() {
     setSubmitting(true);
     try {
       const itemList = items.split(",").map((s) => s.trim()).filter(Boolean);
-      await menuService.createMenu({ date, mealType, items: itemList });
+      await menuService.createMenu({
+        date,
+        mealType,
+        items: itemList,
+        hostelId: selectedHostelId || undefined,
+        status: "published",
+      });
       Alert.alert("Success", "Menu saved successfully.");
       reload();
       setItems("");
@@ -46,7 +69,7 @@ export default function MenuManagementScreen() {
   };
 
   const handleDelete = async (id) => {
-    Alert.alert("Delete", "Delete this menu entry?", [
+    Alert.alert("Delete", "Archive or delete this menu entry?", [
       { text: "Cancel", style: "cancel" },
       { text: "Delete", style: "destructive", onPress: async () => { try { await menuService.deleteMenu(id); reload(); } catch (e) { Alert.alert("Error", getErrorMessage(e)); } } },
     ]);
@@ -56,12 +79,15 @@ export default function MenuManagementScreen() {
     <SafeAreaView style={styles.container}>
       <AppHeader title="Menu Management" subtitle="Add, edit or delete menu items" showBack onBack={() => navigation.goBack()} style={styles.header} />
 
-      <Pressable style={styles.dateBtn} onPress={() => setPickerVisible(true)}>
-        <Text style={styles.dateLabel}>Date</Text>
-        <Text style={styles.dateValue}>{formatDate(date)}</Text>
-      </Pressable>
-
       <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}>
+        <AppSelect label="Hostel" value={selectedHostelId} options={hostelOptions} onChange={setHostelId} />
+        {!isAdmin ? <Text style={styles.hostelNote}>Menus are managed for your assigned hostel.</Text> : null}
+
+        <Pressable style={styles.dateBtn} onPress={() => setPickerVisible(true)}>
+          <Text style={styles.dateLabel}>Date</Text>
+          <Text style={styles.dateValue}>{formatDate(date)}</Text>
+        </Pressable>
+
         {loading ? <LoadingScreen /> : error ? <ErrorView message={getErrorMessage(error)} onRetry={reload} /> : (
           menu.some((m) => m.items.length) ? (
             menu.map((m) => (
@@ -90,6 +116,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   header: { paddingHorizontal: 16, paddingTop: 4 },
   dateBtn: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", borderWidth: 1.5, borderColor: COLORS.border, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 14, backgroundColor: "#f8fafc", marginBottom: 8, marginHorizontal: 16 },
+  hostelNote: { fontSize: 12, color: COLORS.textMuted, marginBottom: 8, paddingHorizontal: 16 },
   dateLabel: { fontSize: 14, fontWeight: "600", color: COLORS.textSecondary },
   dateValue: { fontSize: 14, fontWeight: "700", color: COLORS.textPrimary },
   content: { padding: 16, paddingBottom: 40 },

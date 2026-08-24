@@ -14,6 +14,8 @@ export default function WardenMessScreen() {
   const menu = data?.menu || [];
 
   const links = [
+    { label: "Manage Menu", icon: "🍽️", onPress: () => navigation.navigate("MenuManagement") },
+    { label: "Create Poll", icon: "🗳️", onPress: () => navigation.navigate("CreatePoll") },
     { label: "Poll Results", icon: "📊", onPress: () => navigation.navigate("WardenPollResults") },
     { label: "Suggestions", icon: "💡", onPress: () => navigation.navigate("WardenSuggestion") },
   ];

@@ -10,7 +10,7 @@ import { useFetch } from "../../hooks/useFetch";
 
 export default function StudentMessScreen() {
   const navigation = useNavigation();
-  const menuRes = useFetch(() => menuService.getMenu(), []);
+  const menuRes = useFetch(() => menuService.getMenuToday(), []);
   const pollsRes = useFetch(() => pollService.getActivePolls(), []);
 
   const menu = menuRes.data?.menu || [];

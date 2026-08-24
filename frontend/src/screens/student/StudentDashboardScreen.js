@@ -39,7 +39,7 @@ export default function StudentDashboardScreen() {
   );
   const statsRes = useFetch(() => analyticsService.getStudentAnalytics(), []);
   const pollsRes = useFetch(() => pollService.getActivePolls(), []);
-  const menuRes = useFetch(() => menuService.getMenu(), []);
+  const menuRes = useFetch(() => menuService.getMenuToday(), []);
 
   const latestPoll = (pollsRes.data || [])[0] || null;
   const todayLunch = (menuRes.data?.menu || []).find((m) => m.mealType === "lunch") || null;

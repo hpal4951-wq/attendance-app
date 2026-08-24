@@ -13,6 +13,8 @@ import WardenProfileScreen from "./WardenProfileScreen";
 import WardenMessScreen from "./mess/WardenMessScreen";
 import WardenPollResultsScreen from "./mess/WardenPollResultsScreen";
 import WardenSuggestionScreen from "./mess/WardenSuggestionScreen";
+import MenuManagementScreen from "../admin/mess/MenuManagementScreen";
+import CreatePollScreen from "../admin/mess/CreatePollScreen";
 import WardenAnalyticsScreen from "./WardenAnalyticsScreen";
 import NotificationsScreen from "../common/NotificationsScreen";
 import HelpScreen from "../common/HelpScreen";
@@ -65,6 +67,8 @@ function MessStack() {
       <Stack.Screen name="WardenMess" component={WardenMessScreen} />
       <Stack.Screen name="WardenPollResults" component={WardenPollResultsScreen} />
       <Stack.Screen name="WardenSuggestion" component={WardenSuggestionScreen} />
+      <Stack.Screen name="MenuManagement" component={MenuManagementScreen} />
+      <Stack.Screen name="CreatePoll" component={CreatePollScreen} />
     </Stack.Navigator>
   );
 }

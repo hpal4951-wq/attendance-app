@@ -8,9 +8,10 @@ import { notifyAllStudents } from "../utils/notify.js";
 const badRequest = (res, msg) => res.status(400).json({ success: false, message: msg });
 const notFound = (res, msg = "Poll not found") => res.status(404).json({ success: false, message: msg });
 const conflict = (res, msg) => res.status(409).json({ success: false, message: msg });
+const forbidden = (res, msg = "Forbidden") => res.status(403).json({ success: false, message: msg });
 const serverError = (res, error) => {
   console.error("poll.controller error:", error);
-  return res.status(500).json({ success: false, message: "Server error. Please try again later.", error: error.message });
+  return res.status(500).json({ success: false, message: "Server error. Please try again later." });
 };
 
 // ─── Helpers ────────────────────────────────────────────────
@@ -29,6 +30,8 @@ const serializePoll = (poll, opts = {}) => {
     question: p.question,
     description: p.description,
     type: p.type,
+    hostelId: p.hostelId ? String(p.hostelId) : null,
+    isGlobal: !!p.isGlobal,
     options: (p.options || []).map((o) => ({ _id: o._id, text: o.text, votes: o.votes })),
     startAt: p.startAt,
     endAt: p.endAt,
@@ -50,14 +53,42 @@ const hasVoted = async (pollId, studentId) => {
   return !!vote;
 };
 
+const getWardenHostel = async (userId) => {
+  const user = await User.findById(userId).select("role hostelId blockId");
+  if (!user || user.role !== "warden") return null;
+  return user;
+};
+
+// A poll is visible to a student if it is global OR belongs to their hostel.
+const pollVisibleToStudent = (poll, student) => {
+  if (poll.isGlobal) return true;
+  if (!poll.hostelId) return true; // legacy/unscoped poll — visible to all
+  return student.hostelId && String(poll.hostelId) === String(student.hostelId);
+};
+
 // ─── Public / shared endpoints ──────────────────────────────
 export const getActivePolls = async (req, res) => {
   try {
     const now = new Date();
-    const polls = await Poll.find({ closed: { $ne: true }, $or: [{ endAt: { $gte: now } }, { endAt: null }] }).sort({ endAt: 1 });
-    const active = polls.filter((p) => getPollStatus(p, now) === "active");
-    const student = await getStudentProfile(req.user.id);
-    const data = await Promise.all(active.map(async (p) => serializePoll(p, { hasVoted: student ? await hasVoted(p._id, student._id) : false })));
+    const query = { closed: { $ne: true }, $or: [{ endAt: { $gte: now } }, { endAt: null }] };
+    const polls = await Poll.find(query).sort({ endAt: 1 });
+
+    const user = await User.findById(req.user.id).select("role");
+    let visible = polls.filter((p) => getPollStatus(p, now) === "active");
+
+    if (user?.role === "student") {
+      const student = await getStudentProfile(req.user.id);
+      visible = visible.filter((p) => pollVisibleToStudent(p, student));
+      const data = await Promise.all(visible.map(async (p) => serializePoll(p, { hasVoted: student ? await hasVoted(p._id, student._id) : false })));
+      return res.status(200).json({ success: true, count: data.length, data });
+    }
+
+    if (user?.role === "warden") {
+      const warden = await getWardenHostel(req.user.id);
+      visible = visible.filter((p) => !p.hostelId || (warden?.hostelId && String(p.hostelId) === String(warden.hostelId)));
+    }
+
+    const data = await Promise.all(visible.map(async (p) => serializePoll(p)));
     return res.status(200).json({ success: true, count: data.length, data });
   } catch (e) { return serverError(res, e); }
 };
@@ -67,6 +98,7 @@ export const getPollById = async (req, res) => {
     const poll = await Poll.findById(req.params.id);
     if (!poll) return notFound(res);
     const student = await getStudentProfile(req.user.id);
+    if (student && !pollVisibleToStudent(poll, student)) return forbidden(res, "Poll is not available for your hostel");
     const voted = student ? await hasVoted(poll._id, student._id) : false;
     return res.status(200).json({ success: true, data: serializePoll(poll, { hasVoted: voted }) });
   } catch (e) { return serverError(res, e); }
@@ -76,6 +108,8 @@ export const getPollResults = async (req, res) => {
   try {
     const poll = await Poll.findById(req.params.id);
     if (!poll) return notFound(res);
+    const student = await getStudentProfile(req.user.id);
+    if (student && !pollVisibleToStudent(poll, student)) return forbidden(res, "Poll is not available for your hostel");
     const p = serializePoll(poll);
     const total = p.totalVotes || 0;
     const options = p.options.map((o) => ({
@@ -92,9 +126,20 @@ export const getPollHistory = async (req, res) => {
   try {
     const polls = await Poll.find({}).sort({ endAt: -1 });
     const now = new Date();
-    const history = polls.filter((p) => getPollStatus(p, now) === "closed");
-    const student = await getStudentProfile(req.user.id);
-    const data = await Promise.all(history.map(async (p) => serializePoll(p, { hasVoted: student ? await hasVoted(p._id, student._id) : false })));
+    let history = polls.filter((p) => getPollStatus(p, now) === "closed");
+
+    const user = await User.findById(req.user.id).select("role");
+    if (user?.role === "student") {
+      const student = await getStudentProfile(req.user.id);
+      history = history.filter((p) => pollVisibleToStudent(p, student));
+      const data = await Promise.all(history.map(async (p) => serializePoll(p, { hasVoted: student ? await hasVoted(p._id, student._id) : false })));
+      return res.status(200).json({ success: true, count: data.length, data });
+    }
+    if (user?.role === "warden") {
+      const warden = await getWardenHostel(req.user.id);
+      history = history.filter((p) => !p.hostelId || (warden?.hostelId && String(p.hostelId) === String(warden.hostelId)));
+    }
+    const data = await Promise.all(history.map(async (p) => serializePoll(p)));
     return res.status(200).json({ success: true, count: data.length, data });
   } catch (e) { return serverError(res, e); }
 };
@@ -108,8 +153,11 @@ export const submitVote = async (req, res) => {
     const poll = await Poll.findById(req.params.pollId);
     if (!poll) return notFound(res, "Poll not found");
 
+    // Hostel security: student may only vote in polls for their hostel (or global).
+    if (!pollVisibleToStudent(poll, student)) return forbidden(res, "Poll is not available for your hostel");
+
     const status = getPollStatus(poll);
-    if (status !== "active") return badRequest(res, "Poll is not open for voting");
+    if (status !== "active") return badRequest(res, status === "scheduled" ? "Poll has not started yet." : "Poll is closed.");
 
     const existing = await Vote.findOne({ pollId: poll._id, studentId: student._id });
     if (existing) return conflict(res, "You have already voted in this poll.");
@@ -135,11 +183,18 @@ export const submitVote = async (req, res) => {
   }
 };
 
-// ─── Admin endpoints ────────────────────────────────────────
+// ─── Admin / Warden endpoints ───────────────────────────────
 export const listPolls = async (req, res) => {
   try {
     const { status } = req.query;
-    const polls = await Poll.find({}).sort({ createdAt: -1 });
+    const user = await User.findById(req.user.id).select("role hostelId");
+
+    let query = {};
+    if (user?.role === "warden" && user.hostelId) {
+      query = { $or: [{ hostelId: user.hostelId }, { hostelId: null }] };
+    }
+
+    const polls = await Poll.find(query).sort({ createdAt: -1 });
     let data = polls.map((p) => serializePoll(p));
     if (status) data = data.filter((p) => p.status === status);
     return res.status(200).json({ success: true, count: data.length, data });
@@ -148,15 +203,38 @@ export const listPolls = async (req, res) => {
 
 export const createPoll = async (req, res) => {
   try {
-    const { question, description, type, options, startAt, endAt } = req.body;
+    const { question, description, type, options, startAt, endAt, hostelId, isGlobal } = req.body;
     if (!question) return badRequest(res, "Question is required");
+    if (String(question).trim().length > 300) return badRequest(res, "Question is too long");
     if (!Array.isArray(options) || options.length < 2) return badRequest(res, "At least 2 options are required");
-    const clean = options.filter((o) => o && String(o).trim()).map((o) => ({ text: String(o).trim(), votes: 0 }));
+
+    // Normalize + reject duplicate options (case/spacing insensitive).
+    const seen = new Set();
+    const clean = [];
+    for (const o of options) {
+      const text = o && String(o).trim();
+      if (!text) continue;
+      const key = text.toLowerCase().replace(/\s+/g, " ");
+      if (seen.has(key)) return badRequest(res, "Duplicate options are not allowed");
+      seen.add(key);
+      clean.push({ text, votes: 0 });
+    }
     if (clean.length < 2) return badRequest(res, "At least 2 valid options are required");
+
+    // Warden polls are always scoped to their assigned hostel (from DB).
+    let targetHostelId = hostelId || null;
+    let global = !!isGlobal;
+    if (req.user.role === "warden") {
+      const warden = await User.findById(req.user.id).select("hostelId");
+      targetHostelId = warden?.hostelId || null;
+      global = false;
+    }
 
     const poll = await Poll.create({
       question: String(question).trim(),
       description: description ? String(description).trim() : null,
+      hostelId: targetHostelId,
+      isGlobal: global,
       type: ["single_choice", "multiple_choice", "rating", "yes_no"].includes(type) ? type : "single_choice",
       options: clean,
       startAt: startAt || new Date(),
@@ -164,7 +242,8 @@ export const createPoll = async (req, res) => {
       createdBy: req.user.id,
       closed: false,
     });
-    logAudit({ userId: req.user.id, action: "POLL_CREATED", entity: "Poll", entityId: poll._id, metadata: { question: poll.question }, req });
+
+    logAudit({ userId: req.user.id, action: "POLL_CREATED", entity: "Poll", entityId: poll._id, metadata: { question: poll.question, hostelId: targetHostelId }, req });
     notifyAllStudents({
       title: "New Mess Poll",
       message: poll.question,
@@ -177,16 +256,34 @@ export const createPoll = async (req, res) => {
 
 export const updatePoll = async (req, res) => {
   try {
-    const { question, description, type, startAt, endAt } = req.body;
+    const poll = await Poll.findById(req.params.id);
+    if (!poll) return notFound(res);
+
+    const hasExistingVotes = (await Vote.countDocuments({ pollId: poll._id })) > 0;
+
+    const { question, description, type, startAt, endAt, closed } = req.body;
     const update = {};
-    if (question !== undefined) update.question = String(question).trim();
+
+    // Lock question/type once voting has begun to preserve result integrity.
+    if (hasExistingVotes) {
+      if (question !== undefined && String(question).trim() !== poll.question) {
+        return badRequest(res, "Question cannot be changed after voting has started");
+      }
+      if (type !== undefined && type !== poll.type) {
+        return badRequest(res, "Poll type cannot be changed after voting has started");
+      }
+    } else {
+      if (question !== undefined) update.question = String(question).trim();
+      if (type !== undefined) update.type = ["single_choice", "multiple_choice", "rating", "yes_no"].includes(type) ? type : "single_choice";
+    }
     if (description !== undefined) update.description = description ? String(description).trim() : null;
-    if (type !== undefined) update.type = ["single_choice", "multiple_choice", "rating", "yes_no"].includes(type) ? type : "single_choice";
     if (startAt !== undefined) update.startAt = startAt;
     if (endAt !== undefined) update.endAt = endAt;
-    const poll = await Poll.findByIdAndUpdate(req.params.id, update, { new: true, runValidators: true });
-    if (!poll) return notFound(res);
-    return res.status(200).json({ success: true, message: "Poll updated successfully", data: serializePoll(poll) });
+    if (closed !== undefined) update.closed = !!closed;
+
+    const updated = await Poll.findByIdAndUpdate(poll._id, update, { new: true, runValidators: true });
+    if (!updated) return notFound(res);
+    return res.status(200).json({ success: true, message: "Poll updated successfully", data: serializePoll(updated) });
   } catch (e) { return serverError(res, e); }
 };
 
@@ -201,10 +298,44 @@ export const closePoll = async (req, res) => {
 
 export const deletePoll = async (req, res) => {
   try {
-    const poll = await Poll.findByIdAndDelete(req.params.id);
+    const poll = await Poll.findById(req.params.id);
     if (!poll) return notFound(res);
-    await Vote.deleteMany({ pollId: poll._id });
+    const voteCount = await Vote.countDocuments({ pollId: poll._id });
+    if (voteCount > 0) {
+      // Preserve audit/history — archive instead of destructive delete.
+      poll.closed = true;
+      await poll.save();
+      return conflict(res, "Poll has votes and cannot be deleted. It has been closed instead.");
+    }
+    await Poll.findByIdAndDelete(poll._id);
     logAudit({ userId: req.user.id, action: "POLL_DELETED", entity: "Poll", entityId: poll._id, metadata: { question: poll.question }, req });
     return res.status(200).json({ success: true, message: "Poll deleted successfully" });
+  } catch (e) { return serverError(res, e); }
+};
+
+// Recomputes option vote counts from the Vote collection (source of truth).
+export const recomputePollResults = async (req, res) => {
+  try {
+    const poll = await Poll.findById(req.params.id);
+    if (!poll) return notFound(res);
+
+    const votes = await Vote.find({ pollId: poll._id });
+    const counts = {};
+    votes.forEach((v) => {
+      (v.optionIds || []).forEach((oid) => {
+        const key = String(oid);
+        counts[key] = (counts[key] || 0) + 1;
+      });
+    });
+
+    let changed = false;
+    poll.options.forEach((o) => {
+      const c = counts[String(o._id)] || 0;
+      if (o.votes !== c) { o.votes = c; changed = true; }
+    });
+    if (changed) await poll.save();
+
+    logAudit({ userId: req.user.id, action: "POLL_RESULTS_RECOMPUTED", entity: "Poll", entityId: poll._id, metadata: { votes: votes.length }, req });
+    return res.status(200).json({ success: true, message: "Poll results recomputed", data: serializePoll(poll) });
   } catch (e) { return serverError(res, e); }
 };

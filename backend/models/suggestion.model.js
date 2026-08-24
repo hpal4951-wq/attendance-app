@@ -8,6 +8,12 @@ const suggestionSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    hostelId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Hostel",
+      default: null,
+      index: true,
+    },
     type: {
       type: String,
       enum: ["vegetable", "dish", "breakfast", "lunch", "dinner", "snack", "general"],
@@ -38,4 +44,5 @@ const suggestionSchema = new mongoose.Schema(
 );
 
 const Suggestion = mongoose.model("Suggestion", suggestionSchema);
+suggestionSchema.index({ hostelId: 1, status: 1, createdAt: -1 });
 export default Suggestion;

@@ -28,6 +28,16 @@ const pollSchema = new mongoose.Schema(
       trim: true,
       default: null,
     },
+    hostelId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Hostel",
+      default: null,
+      index: true,
+    },
+    isGlobal: {
+      type: Boolean,
+      default: false,
+    },
     type: {
       type: String,
       enum: ["single_choice", "multiple_choice", "rating", "yes_no"],
@@ -57,6 +67,9 @@ const pollSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+pollSchema.index({ hostelId: 1, closed: 1, endAt: 1 });
+pollSchema.index({ endAt: 1 });
 
 const Poll = mongoose.model("Poll", pollSchema);
 export default Poll;

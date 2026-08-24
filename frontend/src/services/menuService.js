@@ -19,8 +19,11 @@ function buildQuery(params = {}) {
   return s ? `?${s}` : "";
 }
 
-export async function getMenu(date) {
-  return extractData(await apiGet(`/mess/menu${buildQuery({ date })}`));
+export async function getMenu(date, hostelId) {
+  return extractData(await apiGet(`/mess/menu${buildQuery({ date, hostelId })}`));
+}
+export async function getMenuToday() {
+  return extractData(await apiGet("/mess/menu/today"));
 }
 export async function getWeeklyMenu() {
   return extractData(await apiGet("/mess/menu/weekly"));
@@ -35,5 +38,5 @@ export async function deleteMenu(id) {
   return apiDelete(`/mess/menu/${id}`);
 }
 
-const menuService = { getMenu, getWeeklyMenu, createMenu, updateMenu, deleteMenu };
+const menuService = { getMenu, getMenuToday, getWeeklyMenu, createMenu, updateMenu, deleteMenu };
 export default menuService;

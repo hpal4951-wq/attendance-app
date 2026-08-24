@@ -19,17 +19,21 @@ const seedData = async () => {
     await mongoose.connect(process.env.MONGO_URI);
     console.log("MongoDB connected for seed");
 
-    await Promise.all([
-      Hostel.deleteMany({}),
-      User.deleteMany({}),
-      StudentProfile.deleteMany({}),
-      Block.deleteMany({}),
-      Room.deleteMany({}),
+await Promise.all([
       Menu.deleteMany({}),
       Poll.deleteMany({}),
       Vote.deleteMany({}),
       Suggestion.deleteMany({}),
+      Hostel.deleteMany({}),
+      Block.deleteMany({}),
+      Room.deleteMany({}),
+      User.deleteMany({ role: { $in: ["admin", "warden", "student"] } }),
+      StudentProfile.deleteMany({}),
     ]);
+
+    // Clean up legacy indexes that may conflict with schema changes.
+    try { await Menu.collection.dropIndex("date_1_mealType_1"); } catch (_) {}
+    try { await Menu.collection.dropIndex("hostelId_1_date_1_mealType_1"); } catch (_) {}
 
     const hostel = await Hostel.create({
       name: "Boys Hostel A",
@@ -179,18 +183,20 @@ const seedData = async () => {
       studentProfileId: studentProfile._id,
     });
 
-    // --- Mess module demo data: menu, polls, suggestions ---
+    // --- Mess module demo data: menu, polls, suggestions (hostel-scoped) ---
     await Menu.create([
-      { date: todayStr, mealType: "breakfast", items: ["Poha", "Milk", "Banana"] },
-      { date: todayStr, mealType: "lunch", items: ["Dal", "Rice", "Roti", "Aloo Gobi"] },
-      { date: todayStr, mealType: "snacks", items: ["Tea", "Samosa"] },
-      { date: todayStr, mealType: "dinner", items: ["Paneer", "Dal", "Rice", "Salad"] },
+      { hostelId: hostel._id, date: todayStr, mealType: "breakfast", items: ["Poha", "Milk", "Banana"], status: "published", createdBy: admin._id },
+      { hostelId: hostel._id, date: todayStr, mealType: "lunch", items: ["Dal", "Rice", "Roti", "Aloo Gobi"], status: "published", createdBy: admin._id },
+      { hostelId: hostel._id, date: todayStr, mealType: "snacks", items: ["Tea", "Samosa"], status: "published", createdBy: admin._id },
+      { hostelId: hostel._id, date: todayStr, mealType: "dinner", items: ["Paneer", "Dal", "Rice", "Salad"], status: "published", createdBy: admin._id },
     ]);
 
     const activePoll = await Poll.create({
       question: "Which vegetable should be added next week?",
       description: "Choose your preferred vegetable for next week's menu.",
       type: "single_choice",
+      hostelId: hostel._id,
+      isGlobal: false,
       options: ["Aloo Gobi", "Bhindi", "Mix Veg", "Palak Paneer"].map((text) => ({ text, votes: 0 })),
       startAt: new Date(Date.now() - 86400000),
       endAt: new Date(Date.now() + 3 * 86400000),
@@ -202,6 +208,8 @@ const seedData = async () => {
       question: "Which evening snack do you prefer?",
       description: "Choose your favourite evening snack.",
       type: "single_choice",
+      hostelId: hostel._id,
+      isGlobal: false,
       options: ["Samosa", "Poha", "Sandwich"].map((text) => ({ text, votes: 0 })),
       startAt: new Date(Date.now() - 7 * 86400000),
       endAt: new Date(Date.now() - 1 * 86400000),
@@ -221,6 +229,7 @@ const seedData = async () => {
 
     await Suggestion.create({
       studentId: studentProfile._id,
+      hostelId: hostel._id,
       type: "vegetable",
       title: "Bhindi Masala",
       description: "Please include this once next week.",
