@@ -1,27 +1,32 @@
 import React from "react";
 import { View, Text, StyleSheet, SafeAreaView, ScrollView, Alert } from "react-native";
-import { COLORS, FONT_SIZE, RADIUS, SPACING } from "../../theme";
+import { COLORS, FONT_SIZE, RADIUS, SPACING, SHADOW } from "../../theme";
 import { AppHeader, Avatar, Badge, AppButton, AppCard } from "../../components";
 import { useAuth } from "../../context/AuthContext";
 
+const displayName = (obj) => {
+  if (!obj) return "Not Assigned";
+  if (typeof obj === "object" && obj.name) return obj.name;
+  return "Not Assigned";
+};
+
 export default function WardenProfileScreen() {
   const { user, logout } = useAuth();
-
-  const hostel = user?.hostelId || {};
-  const block = user?.blockId || {};
 
   const rows = [
     { label: "Name", value: user?.name || "—" },
     { label: "Phone", value: user?.phone || "—" },
     { label: "Role", value: "Warden" },
-    { label: "Hostel", value: hostel?.name || "—" },
-    { label: "Block", value: block?.name || "—" },
+    { label: "Hostel", value: displayName(user?.hostelId) },
+    { label: "Block", value: displayName(user?.blockId) },
   ];
 
   const handleLogout = () => {
     Alert.alert("Logout", "Are you sure you want to logout?", [
       { text: "Cancel", style: "cancel" },
-      { text: "Logout", style: "destructive", onPress: logout },
+      { text: "Logout", style: "destructive", onPress: async () => {
+        try { await logout(); } catch (e) { console.warn("logout error:", e); }
+      }},
     ]);
   };
 

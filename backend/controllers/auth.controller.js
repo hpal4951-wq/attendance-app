@@ -54,6 +54,7 @@ export const login = async (req, res) => {
       await user.save();
     }
 
+    await user.populate(["hostelId", "blockId"]);
     const token = generateToken(user);
 
     logAudit({ userId: user._id, action: "LOGIN_SUCCESS", entity: "User", entityId: user._id, metadata: { role: user.role, phone }, req });

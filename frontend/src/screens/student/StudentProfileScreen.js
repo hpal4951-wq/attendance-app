@@ -6,6 +6,12 @@ import { useAuth } from "../../context/AuthContext";
 import { useFetch } from "../../hooks/useFetch";
 import attendanceService from "../../services/attendanceService";
 
+const displayName = (obj) => {
+  if (!obj) return "Not Assigned";
+  if (typeof obj === "object" && obj.name) return obj.name;
+  return "Not Assigned";
+};
+
 export default function StudentProfileScreen() {
   const { user, logout } = useAuth();
   const { data } = useFetch(() => attendanceService.getTodayAttendance(), []);
@@ -20,15 +26,17 @@ export default function StudentProfileScreen() {
     { label: "Phone", value: user?.phone || "—" },
     { label: "Role", value: "Student" },
     { label: "Student ID", value: student.studentCode || "—" },
-    { label: "Hostel", value: hostel.name || "—" },
-    { label: "Block", value: block.name || "—" },
-    { label: "Room", value: room.roomNumber || "—" },
+    { label: "Hostel", value: displayName(hostel) },
+    { label: "Block", value: displayName(block) },
+    { label: "Room", value: room.roomNumber || "Not Assigned" },
   ];
 
   const handleLogout = () => {
     Alert.alert("Logout", "Are you sure you want to logout?", [
       { text: "Cancel", style: "cancel" },
-      { text: "Logout", style: "destructive", onPress: logout },
+      { text: "Logout", style: "destructive", onPress: async () => {
+        try { await logout(); } catch (e) { console.warn("logout error:", e); }
+      }},
     ]);
   };
 

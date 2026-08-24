@@ -1,6 +1,7 @@
 import React, { createContext, useState, useEffect, useCallback, useContext } from "react";
 import { getToken, clearAuth } from "../utils/storage";
 import { loginUser as loginAPI, getCurrentUser as getMe } from "../services/authService";
+import { setOnUnauthorized } from "../services/api";
 
 const AuthContext = createContext(null);
 
@@ -16,9 +17,18 @@ const AuthContext = createContext(null);
 export function AuthProvider({ children }) {
   const [user, setUserState] = useState(null);
   const [token, setTokenState] = useState(null);
-  const [loading, setLoading] = useState(true); // true until session is restored
+  const [loading, setLoading] = useState(true);
 
   const isAuthenticated = !!token && !!user;
+
+  // ─── Register 401 auto-logout handler ───
+  useEffect(() => {
+    setOnUnauthorized(async () => {
+      await clearAuth();
+      setTokenState(null);
+      setUserState(null);
+    });
+  }, []);
 
   // ─── Restore session on app start ───
   const restoreSession = useCallback(async () => {
@@ -28,18 +38,14 @@ export function AuthProvider({ children }) {
         setLoading(false);
         return;
       }
-
-      // Validate token with backend
       const res = await getMe();
       if (res.success && res.data) {
         setTokenState(storedToken);
         setUserState(res.data);
       } else {
-        // Token invalid — clear everything
         await clearAuth();
       }
     } catch (err) {
-      // Network error or invalid token — clear auth
       await clearAuth();
     } finally {
       setLoading(false);
@@ -51,20 +57,16 @@ export function AuthProvider({ children }) {
   }, [restoreSession]);
 
   // ─── Login ───
-  // loginAPI already persists token + user to AsyncStorage.
-  // We only mirror them into React state here.
   const login = useCallback(async ({ phone, password, deviceId }) => {
     const res = await loginAPI({ phone, password, deviceId });
-
     if (res.success && res.token) {
       setTokenState(res.token);
       setUserState(res.user);
     }
-
     return res;
   }, []);
 
-  // ─── Logout ───
+  // ─── Logout — clears storage + state, the AppNavigator reacts ───
   const logout = useCallback(async () => {
     await clearAuth();
     setTokenState(null);

@@ -11,12 +11,14 @@ import {
   StatusBar,
 } from "react-native";
 import { COLORS, FONT_SIZE, RADIUS, SPACING } from "../../theme";
+import { useNavigation } from "@react-navigation/native";
 import { useAuth } from "../../context/AuthContext";
 import { AppInput, AppButton, Logo } from "../../components";
 import { isValidPhone } from "../../utils/validators";
 import { getOrCreateDeviceId } from "../../utils/storage";
 
 export default function LoginScreen() {
+  const navigation = useNavigation();
   const { login } = useAuth();
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
@@ -158,6 +160,15 @@ export default function LoginScreen() {
         </Animated.View>
 
         <Text style={styles.footer}>v1.0 · HostelConnect</Text>
+
+        {__DEV__ ? (
+          <Pressable
+            style={({ pressed }) => [styles.devLink, pressed && { opacity: 0.7 }]}
+            onPress={() => navigation.navigate("DevRoleSwitcher")}
+          >
+            <Text style={styles.devLinkText}>Dev Switch Role</Text>
+          </Pressable>
+        ) : null}
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -231,5 +242,18 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZE.xs,
     color: COLORS.textMuted,
     marginTop: SPACING.xl,
+  },
+  devLink: {
+    alignSelf: "center",
+    marginTop: SPACING.md,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: RADIUS.full,
+    backgroundColor: COLORS.warningLight,
+  },
+  devLinkText: {
+    fontSize: FONT_SIZE.sm,
+    fontWeight: "700",
+    color: COLORS.warning,
   },
 });

@@ -3,6 +3,12 @@ import { getToken } from "../utils/storage";
 
 const BASE_URL = API_BASE_URL;
 
+// Registered by AuthContext so a 401 can trigger a full session clear.
+let _onUnauthorized = null;
+export function setOnUnauthorized(fn) {
+  _onUnauthorized = fn;
+}
+
 async function getAuthHeaders() {
   const token = await getToken();
   return {
@@ -22,6 +28,13 @@ async function handleResponse(response) {
   }
 
   if (!response.ok) {
+    if (response.status === 401 && _onUnauthorized) {
+      try {
+        await _onUnauthorized();
+      } catch (e) {
+        console.warn("api 401 handler error:", e);
+      }
+    }
     const error = new Error(
       data.message || `Request failed with status ${response.status}`
     );
