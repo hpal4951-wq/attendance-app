@@ -7,6 +7,7 @@ import { COLORS } from "../../theme";
 import AdminDashboardScreen from "./AdminDashboardScreen";
 import HostelManagementScreen from "./HostelManagementScreen";
 import AddHostelScreen from "./AddHostelScreen";
+import EditHostelLocationScreen from "./EditHostelLocationScreen";
 import BlockManagementScreen from "./BlockManagementScreen";
 import AddBlockScreen from "./AddBlockScreen";
 import RoomManagementScreen from "./RoomManagementScreen";
@@ -70,6 +71,7 @@ function HostelStack() {
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="HostelList" component={HostelManagementScreen} />
       <Stack.Screen name="AddHostel" component={AddHostelScreen} />
+      <Stack.Screen name="EditHostelLocation" component={EditHostelLocationScreen} />
       <Stack.Screen name="BlockList" component={BlockManagementScreen} />
       <Stack.Screen name="AddBlock" component={AddBlockScreen} />
       <Stack.Screen name="RoomList" component={RoomManagementScreen} />

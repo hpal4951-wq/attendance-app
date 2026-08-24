@@ -13,6 +13,23 @@ export function getErrorMessage(
     return "Unable to connect to server. Please check your internet connection.";
   }
 
+  const code = err?.data?.code;
+  if (code) {
+    const codeMessages = {
+      LOCATION_ACCURACY_LOW:
+        "Location accuracy is too low. Please move to an open area and try again.",
+      LOCATION_SUSPECTED:
+        "Location could not be verified. Please try again in a moment.",
+      HOSTEL_NOT_ASSIGNED: "No hostel is assigned to this student.",
+      HOSTEL_LOCATION_NOT_CONFIGURED:
+        "Hostel attendance location is not configured. Please contact the admin.",
+      INVALID_COORDINATES: "Invalid coordinates received from the device.",
+      STUDENT_PROFILE_NOT_FOUND: "Student profile not found.",
+      ATTENDANCE_ALREADY_RECORDED: "Attendance has already been recorded.",
+    };
+    if (codeMessages[code]) return codeMessages[code];
+  }
+
   switch (err.status) {
     case 401:
       return "Your session has expired. Please login again.";

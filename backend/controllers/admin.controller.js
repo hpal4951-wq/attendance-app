@@ -159,6 +159,61 @@ export const createHostel = async (req, res) => {
   }
 };
 
+// ─── Hostel GPS location ───────────────────────────────────
+export const updateHostelLocation = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!isValidId(id)) return notFound(res, "Hostel not found");
+
+    const hostel = await Hostel.findById(id);
+    if (!hostel) return notFound(res, "Hostel not found");
+
+    const { latitude, longitude, attendanceRadius } = req.body;
+
+    if (latitude === undefined || latitude === null || isNaN(Number(latitude))) {
+      return badRequest(res, "Valid latitude is required");
+    }
+    const lat = Number(latitude);
+    if (lat < -90 || lat > 90) {
+      return badRequest(res, "Latitude must be between -90 and 90");
+    }
+
+    if (longitude === undefined || longitude === null || isNaN(Number(longitude))) {
+      return badRequest(res, "Valid longitude is required");
+    }
+    const lng = Number(longitude);
+    if (lng < -180 || lng > 180) {
+      return badRequest(res, "Longitude must be between -180 and 180");
+    }
+
+    const radius = attendanceRadius ?? hostel.radiusMeters;
+    if (isNaN(Number(radius)) || Number(radius) <= 0) {
+      return badRequest(res, "Attendance radius must be a positive number");
+    }
+
+    hostel.latitude = lat;
+    hostel.longitude = lng;
+    hostel.radiusMeters = Number(radius);
+    await hostel.save();
+
+    logAudit({ userId: req.user.id, action: "HOSTEL_LOCATION_UPDATED", entity: "Hostel", entityId: hostel._id, metadata: { name: hostel.name }, req });
+
+    return res.status(200).json({
+      success: true,
+      message: "Hostel location updated successfully",
+      data: {
+        _id: hostel._id,
+        name: hostel.name,
+        latitude: hostel.latitude,
+        longitude: hostel.longitude,
+        radiusMeters: hostel.radiusMeters,
+      },
+    });
+  } catch (error) {
+    return serverError(res, error);
+  }
+};
+
 // ─── Blocks ────────────────────────────────────────────────
 export const getBlocks = async (req, res) => {
   try {

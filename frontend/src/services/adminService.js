@@ -1,4 +1,4 @@
-import { apiGet, apiPost, apiPatch } from "./api";
+import { apiGet, apiPost, apiPatch, apiPut } from "./api";
 
 /**
  * Small response-normalization layer.
@@ -55,6 +55,10 @@ export async function getHostels() {
 
 export async function createHostel(data) {
   return apiPost("/admin/hostels", data);
+}
+
+export async function updateHostelLocation(id, data) {
+  return apiPut(`/admin/hostels/${id}/location`, data);
 }
 
 // ─── Blocks ─────────────────────────────────────────────────
@@ -121,6 +125,7 @@ const adminService = {
   getAdminDashboard,
   getHostels,
   createHostel,
+  updateHostelLocation,
   getBlocks,
   createBlock,
   getRooms,

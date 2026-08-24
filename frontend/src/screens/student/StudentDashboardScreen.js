@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useCallback } from "react";
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, RefreshControl, Pressable } from "react-native";
+import React, { useEffect, useState, useCallback, useRef } from "react";
+import { View, Text, StyleSheet, SafeAreaView, ScrollView, RefreshControl, Pressable, AppState, ActivityIndicator } from "react-native";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { COLORS, FONT_SIZE, RADIUS, SPACING, SHADOW } from "../../theme";
 import { useAuth } from "../../context/AuthContext";
@@ -26,6 +26,9 @@ function toDisplayStatus(latest) {
   return "pending";
 }
 
+// Minimum gap between automatic verification attempts (ms).
+const VERIFY_COOLDOWN_MS = 30000;
+
 export default function StudentDashboardScreen() {
   const navigation = useNavigation();
   const { user } = useAuth();
@@ -43,22 +46,109 @@ export default function StudentDashboardScreen() {
 
   const [permissionGranted, setPermissionGranted] = useState(true);
   const [checkingPermission, setCheckingPermission] = useState(true);
+  const [verifying, setVerifying] = useState(false);
+  const [gpsMessage, setGpsMessage] = useState("");
+  const [gpsCode, setGpsCode] = useState(null);
 
+  // Mirrors the latest today-attendance payload for stable auto-verify callback.
+  const todayDataRef = useRef(data);
+  useEffect(() => {
+    todayDataRef.current = data;
+  }, [data]);
+
+  // Session-level guards: never spam verify-location, never verify after present.
+  const verifyingRef = useRef(false);
+  const lastAttemptRef = useRef(0);
+
+  const attemptAutoVerification = useCallback(async () => {
+    if (verifyingRef.current) return;
+    if (Date.now() - lastAttemptRef.current < VERIFY_COOLDOWN_MS) return;
+    lastAttemptRef.current = Date.now();
+
+    const today = todayDataRef.current || {};
+    const latest = (today.records || [])[0];
+    if (latest && latest.status === "present") return;
+
+    let permission;
+    try {
+      permission = await locationService.checkLocationPermission();
+    } catch {
+      permission = "denied";
+    }
+    if (permission !== "granted") {
+      setPermissionGranted(false);
+      return;
+    }
+    setPermissionGranted(true);
+
+    verifyingRef.current = true;
+    setVerifying(true);
+    setGpsMessage("");
+    try {
+      const loc = await locationService.getCurrentLocation();
+      const res = await attendanceService.verifyLocation({
+        latitude: loc.latitude,
+        longitude: loc.longitude,
+        accuracy: loc.accuracy,
+        isMocked: loc.isMocked || false,
+      });
+      const d = res.data || res;
+      setGpsCode(d.code || null);
+      if (d.status === "present") {
+        setGpsMessage("");
+        reload();
+      } else {
+        setGpsMessage(
+          d.status === "outside_hostel"
+            ? "You are outside the hostel attendance area."
+            : d.reason || "Attendance could not be verified."
+        );
+      }
+      statsRes.reload();
+    } catch (e) {
+      if (e.code === "SERVICES_DISABLED") {
+        setGpsCode("SERVICES_DISABLED");
+        setGpsMessage("Location services are disabled. Enable them to verify attendance.");
+      } else if (e.code === "PERMISSION_DENIED") {
+        setPermissionGranted(false);
+      } else {
+        setGpsCode(e?.data?.code || "VERIFY_FAILED");
+        setGpsMessage(getErrorMessage(e, "Unable to verify attendance. Please check your internet connection."));
+      }
+    } finally {
+      verifyingRef.current = false;
+      setVerifying(false);
+    }
+  }, [reload, statsRes.reload]);
+
+  // Auto-verify when the Dashboard becomes active.
   useFocusEffect(
     useCallback(() => {
       let active = true;
       (async () => {
         const status = await locationService.checkLocationPermission();
-        if (active) {
-          setPermissionGranted(status === "granted");
-          setCheckingPermission(false);
+        if (!active) return;
+        setPermissionGranted(status === "granted");
+        setCheckingPermission(false);
+        if (status === "granted") {
+          attemptAutoVerification();
         }
       })();
       return () => {
         active = false;
       };
-    }, [])
+    }, [attemptAutoVerification])
   );
+
+  // Controlled re-verification when the app returns to the foreground.
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") {
+        attemptAutoVerification();
+      }
+    });
+    return () => sub.remove();
+  }, [attemptAutoVerification]);
 
   const firstName = (user?.name || "Student").split(" ")[0];
   const student = data?.student || {};
@@ -112,11 +202,19 @@ export default function StudentDashboardScreen() {
 
             <Text style={styles.sectionTitle}>Today's Attendance</Text>
             <AppCard style={styles.statusCard}>
-              <AttendanceStatus
-                status={displayStatus}
-                lastCheckedAt={latest?.markedAt || null}
-                reason={latest?.reason || null}
-              />
+              {verifying ? (
+                <View style={styles.verifyingRow}>
+                  <ActivityIndicator size="small" color={COLORS.primary} />
+                  <Text style={styles.verifyingText}>Checking your location...</Text>
+                </View>
+              ) : (
+                <AttendanceStatus
+                  status={displayStatus}
+                  lastCheckedAt={latest?.markedAt || null}
+                  reason={latest?.reason || null}
+                />
+              )}
+              {gpsMessage ? <Text style={styles.gpsMessage}>{gpsMessage}</Text> : null}
               {latest ? (
                 <View style={styles.metaRow}>
                   <View style={styles.metaBox}>
@@ -196,6 +294,9 @@ const styles = StyleSheet.create({
   permissionText: { fontSize: FONT_SIZE.sm, color: COLORS.textSecondary, lineHeight: 20, marginBottom: SPACING.md },
   sectionTitle: { fontSize: FONT_SIZE.xl, fontWeight: "800", color: COLORS.textPrimary, marginBottom: SPACING.md, marginTop: SPACING.xs },
   statusCard: { marginBottom: SPACING.lg },
+  verifyingRow: { flexDirection: "row", alignItems: "center", gap: SPACING.md },
+  verifyingText: { fontSize: FONT_SIZE.md, fontWeight: "600", color: COLORS.textSecondary },
+  gpsMessage: { fontSize: FONT_SIZE.sm, color: COLORS.warning, marginTop: SPACING.sm },
   metaRow: { flexDirection: "row", gap: SPACING.md, marginTop: SPACING.lg },
   metaBox: { flex: 1, backgroundColor: COLORS.bg, borderRadius: RADIUS.md, paddingVertical: SPACING.sm, alignItems: "center" },
   metaValue: { fontSize: FONT_SIZE.lg, fontWeight: "800", color: COLORS.textPrimary },

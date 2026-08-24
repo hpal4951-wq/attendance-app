@@ -17,6 +17,11 @@ export function isTimeInRange(current, start, end) {
   return current >= start && current <= end;
 }
 
+export function defaultSlotByTime() {
+  const h = new Date().getHours();
+  return h < 12 ? "morning" : "night";
+}
+
 export function shiftDate(dateStr, days) {
   const [y, m, d] = dateStr.split("-").map(Number);
   const date = new Date(y, m - 1, d);

@@ -5,6 +5,7 @@ import {
   getDashboard,
   getHostels,
   createHostel,
+  updateHostelLocation,
   getBlocks,
   createBlock,
   getRooms,
@@ -32,6 +33,7 @@ router.get("/dashboard", getDashboard);
 
 router.get("/hostels", getHostels);
 router.post("/hostels", createHostel);
+router.put("/hostels/:id/location", updateHostelLocation);
 
 router.get("/blocks", getBlocks);
 router.post("/blocks", createBlock);

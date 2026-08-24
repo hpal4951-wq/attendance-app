@@ -3,6 +3,7 @@ export function decideAttendance({
   radiusMeters,
   accuracy,
   isMocked = false,
+  maxAccuracy = 100,
 }) {
   if (isMocked) {
     return {
@@ -11,29 +12,22 @@ export function decideAttendance({
     };
   }
 
-  if (accuracy && accuracy > 150) {
+  if (accuracy && accuracy > maxAccuracy) {
     return {
       status: "pending",
       reason: "Location accuracy too low",
     };
   }
 
-  if (distance <= radiusMeters && (!accuracy || accuracy <= 80)) {
+  if (distance <= radiusMeters) {
     return {
       status: "present",
-      reason: "Inside hostel radius with valid accuracy",
-    };
-  }
-
-  if (distance <= radiusMeters && accuracy > 80) {
-    return {
-      status: "pending",
-      reason: "Inside radius but accuracy is weak",
+      reason: "Inside hostel attendance radius",
     };
   }
 
   return {
     status: "absent",
-    reason: "Outside hostel radius",
+    reason: "Outside hostel attendance radius",
   };
 }

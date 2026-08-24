@@ -41,11 +41,20 @@ export default function HostelManagementScreen() {
                 <Text style={styles.meta}>Rooms: {item.roomCount ?? 0}</Text>
                 <Text style={styles.meta}>Radius: {item.radiusMeters}m</Text>
               </View>
-              <AppButton
-                title="View Blocks"
-                variant="secondary"
-                onPress={() => navigation.navigate("BlockList", { hostelId: item._id, hostelName: item.name })}
-              />
+              <View style={styles.btnRow}>
+                <AppButton
+                  title="View Blocks"
+                  variant="secondary"
+                  style={styles.flexBtn}
+                  onPress={() => navigation.navigate("BlockList", { hostelId: item._id, hostelName: item.name })}
+                />
+                <AppButton
+                  title="Edit Location"
+                  variant="ghost"
+                  style={styles.flexBtn}
+                  onPress={() => navigation.navigate("EditHostelLocation", { hostel: item })}
+                />
+              </View>
             </AppCard>
           )}
         />
@@ -66,4 +75,6 @@ const styles = StyleSheet.create({
   hostelAddress: { fontSize: FONT_SIZE.sm, color: COLORS.textSecondary, marginBottom: SPACING.md },
   metaRow: { flexDirection: "row", gap: SPACING.lg, marginBottom: SPACING.md },
   meta: { fontSize: FONT_SIZE.sm, color: COLORS.textSecondary, fontWeight: "500" },
+  btnRow: { flexDirection: "row", gap: SPACING.sm },
+  flexBtn: { flex: 1 },
 });

@@ -5,6 +5,7 @@ import StudentProfile from "../models/studentProfile.model.js";
 import User from "../models/user.model.js";
 import { haversineDistance } from "../utils/haversine.js";
 import {
+  defaultSlotByTime,
   getCurrentTimeHHMM,
   getTodayDateString,
   isTimeInRange,
@@ -12,6 +13,9 @@ import {
 import { decideAttendance } from "../utils/attendanceDecision.js";
 import { createNotification } from "./notification.controller.js";
 import { logAudit } from "../utils/audit.js";
+
+const MAX_ACCEPTABLE_ACCURACY =
+  Number(process.env.MAX_ACCEPTABLE_ACCURACY) || 100;
 
 // Determines the data scope for attendance listing endpoints.
 // admin → all records; warden → records for the warden's hostel/block only.
@@ -195,7 +199,18 @@ export const verifyLocation = async (req, res) => {
     if (latitude === undefined || latitude === null || longitude === undefined || longitude === null) {
       return res.status(400).json({
         success: false,
+        code: "INVALID_COORDINATES",
         message: "latitude and longitude are required",
+      });
+    }
+
+    const lat = Number(latitude);
+    const lng = Number(longitude);
+    if (isNaN(lat) || isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+      return res.status(400).json({
+        success: false,
+        code: "INVALID_COORDINATES",
+        message: "Invalid coordinates provided",
       });
     }
 
@@ -217,6 +232,7 @@ export const verifyLocation = async (req, res) => {
     if (!student) {
       return res.status(404).json({
         success: false,
+        code: "STUDENT_PROFILE_NOT_FOUND",
         message: "Student profile not found",
       });
     }
@@ -232,93 +248,153 @@ export const verifyLocation = async (req, res) => {
     if (!hostel) {
       return res.status(404).json({
         success: false,
-        message: "Hostel not found",
+        code: "HOSTEL_NOT_ASSIGNED",
+        message: "No hostel is assigned to this student",
       });
     }
 
-    const radius = hostel.radiusMeters || 120;
-    const distance = haversineDistance(
-      Number(latitude),
-      Number(longitude),
-      hostel.latitude,
-      hostel.longitude
-    );
+    const radius = hostel.radiusMeters;
+    if (
+      hostel.latitude === undefined ||
+      hostel.latitude === null ||
+      hostel.longitude === undefined ||
+      hostel.longitude === null ||
+      !radius ||
+      radius <= 0
+    ) {
+      return res.status(404).json({
+        success: false,
+        code: "HOSTEL_LOCATION_NOT_CONFIGURED",
+        message: "Hostel attendance location is not configured",
+      });
+    }
+
+    const distance = haversineDistance(lat, lng, hostel.latitude, hostel.longitude);
 
     await LocationLog.create({
       studentId: student._id,
-      latitude: Number(latitude),
-      longitude: Number(longitude),
+      latitude: lat,
+      longitude: lng,
       accuracy: accuracy ?? null,
       isMocked,
       source: "attendance_verify_location",
     });
 
+    // Backend is the authority: it decides the result. Client sends raw GPS only.
+    const decision = decideAttendance({
+      distance,
+      radiusMeters: radius,
+      accuracy: accuracy ?? null,
+      isMocked,
+      maxAccuracy: MAX_ACCEPTABLE_ACCURACY,
+    });
+
     let status;
-    let reason;
+    let code;
     if (isMocked) {
       status = "location_unavailable";
-      reason = "Mock location suspected";
-    } else if (accuracy && Number(accuracy) > 150) {
+      code = "LOCATION_SUSPECTED";
+    } else if (decision.status === "pending") {
       status = "location_unavailable";
-      reason = "Location accuracy too low";
-    } else if (distance <= radius) {
+      code = "LOCATION_ACCURACY_LOW";
+    } else if (decision.status === "present") {
       status = "present";
-      reason = "Inside hostel attendance radius";
+      code = "INSIDE_RADIUS";
     } else {
       status = "outside_hostel";
-      reason = "Outside hostel attendance radius";
+      code = "OUTSIDE_RADIUS";
     }
 
-    // Persist today's record only when we are inside a configured attendance window.
-    // Outside windows the live verification result is still returned for display.
-    const slot = getCurrentSlot(hostel.attendanceWindows);
-    if (slot) {
-      const date = getTodayDateString();
+    // Business rule: once PRESENT for a period, never downgrade to outside/absent.
+    const date = getTodayDateString();
+    const slot = getCurrentSlot(hostel.attendanceWindows) || defaultSlotByTime();
+    const existingForPeriod = await Attendance.findOne({
+      studentId: student._id,
+      date,
+      slot,
+    });
+    let attendance = null;
+    let attendanceMarked = false;
+    let alreadyRecorded = false;
+
+    if (existingForPeriod) {
+      alreadyRecorded = true;
+      // A present record is final for the period — do not change it.
+      if (existingForPeriod.status === "present") {
+        attendance = existingForPeriod;
+        status = "present";
+        code = "ALREADY_PRESENT";
+      } else if (status === "present") {
+        // Upgrade a pending/absent record to present once verified inside.
+        attendance = await Attendance.findByIdAndUpdate(
+          existingForPeriod._id,
+          {
+            status: "present",
+            latitude: lat,
+            longitude: lng,
+            accuracy: accuracy ?? null,
+            distanceFromHostel: distance,
+            markedAt: new Date(),
+            reason: decision.reason,
+          },
+          { new: true }
+        );
+        attendanceMarked = true;
+        code = "INSIDE_RADIUS";
+      } else {
+        // Outside / unavailable — keep the existing (non-present) record.
+        attendance = existingForPeriod;
+      }
+    } else {
       const recordStatus =
         status === "present" ? "present" : status === "outside_hostel" ? "absent" : "pending";
-
-      await Attendance.findOneAndUpdate(
-        { studentId: student._id, date, slot },
-        {
-          studentId: student._id,
-          hostelId: hostel._id,
-          date,
-          slot,
-          status: recordStatus,
-          latitude: Number(latitude),
-          longitude: Number(longitude),
-          accuracy: accuracy ?? null,
-          distanceFromHostel: distance,
-          markedAt: new Date(),
-          source: "auto_location",
-          reason,
-        },
-        { upsert: true, new: true }
-      );
+      attendance = await Attendance.create({
+        studentId: student._id,
+        hostelId: hostel._id,
+        date,
+        slot,
+        status: recordStatus,
+        latitude: lat,
+        longitude: lng,
+        accuracy: accuracy ?? null,
+        distanceFromHostel: distance,
+        markedAt: new Date(),
+        source: "auto_location",
+        reason: decision.reason,
+      });
+      attendanceMarked = status === "present";
     }
 
-    // Meaningful, non-spammy notification on the attendance status
-    const notifMap = {
-      present: ["Attendance verified", "Attendance verified successfully."],
-      outside_hostel: ["Outside hostel area", "Your location was outside the allowed hostel area."],
-      location_unavailable: ["Attendance not verified", "Attendance could not be verified because location was unavailable."],
-    };
-    const notif = notifMap[status];
-    if (notif) {
-      createNotification({ userId: req.user.id, title: notif[0], message: notif[1], type: "attendance", data: { status, date: getTodayDateString() } });
+    // Non-spammy notification — only when a fresh record is persisted.
+    if (attendanceMarked || (!alreadyRecorded && status !== "present")) {
+      const notifMap = {
+        present: ["Attendance verified", "Attendance verified successfully."],
+        outside_hostel: ["Outside hostel area", "Your location was outside the allowed hostel area."],
+        location_unavailable: ["Attendance not verified", "Attendance could not be verified because location was unavailable."],
+      };
+      const notif = notifMap[status];
+      if (notif) {
+        createNotification({ userId: req.user.id, title: notif[0], message: notif[1], type: "attendance", data: { status, date } });
+      }
     }
-    logAudit({ userId: req.user.id, action: "ATTENDANCE_VERIFIED", entity: "Attendance", metadata: { status, distance }, req });
+    logAudit({ userId: req.user.id, action: "ATTENDANCE_VERIFIED", entity: "Attendance", metadata: { status, distance, code }, req });
 
     return res.status(200).json({
       success: true,
       data: {
         status,
+        code,
+        attendanceMarked,
+        alreadyRecorded,
         distanceFromHostel: distance,
         allowedRadius: radius,
         accuracy: accuracy ?? null,
-        reason,
-        slot: slot || null,
+        reason: decision.reason,
+        slot,
         verifiedAt: new Date(),
+        attendance: attendance
+          ? { _id: attendance._id, date: attendance.date, slot: attendance.slot, status: attendance.status }
+          : null,
       },
     });
   } catch (error) {
