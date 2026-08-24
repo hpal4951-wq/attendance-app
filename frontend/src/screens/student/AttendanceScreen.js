@@ -43,7 +43,10 @@ const RESULT_META = {
 };
 
 export default function AttendanceScreen() {
-  const [state, setState] = useState("checking"); // checking | permissionRequired | permissionBlocked | servicesDisabled | processing | result | error
+  // Clear state model: checking | permissionRequired | permissionBlocked |
+  // servicesDisabled | processing | windowClosed | lowAccuracy | locationUnavailable |
+  // networkError | result | error
+  const [state, setState] = useState("checking");
   const [result, setResult] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
@@ -92,9 +95,16 @@ export default function AttendanceScreen() {
     } catch (e) {
       if (e.code === "SERVICES_DISABLED") setState("servicesDisabled");
       else if (e.code === "PERMISSION_DENIED") setState("permissionRequired");
+      else if (e.isNetwork) setState("networkError");
       else {
-        setErrorMsg(getErrorMessage(e));
-        setState("error");
+        const code = e?.data?.code;
+        if (code === "ATTENDANCE_WINDOW_CLOSED") setState("windowClosed");
+        else if (code === "LOCATION_ACCURACY_LOW") setState("lowAccuracy");
+        else if (code === "LOCATION_UNAVAILABLE") setState("locationUnavailable");
+        else {
+          setErrorMsg(getErrorMessage(e));
+          setState("error");
+        }
       }
     } finally {
       if (mode === "refresh") setRefreshing(false);
@@ -174,6 +184,54 @@ export default function AttendanceScreen() {
             <Text style={styles.stateEmoji}>⏳</Text>
             <Text style={styles.stateTitle}>Processing Attendance</Text>
             <Text style={styles.stateText}>Sending your verified location to the server...</Text>
+          </View>
+        );
+
+      case "windowClosed":
+        return (
+          <View style={styles.centerBox}>
+            <Text style={styles.stateEmoji}>🕐</Text>
+            <Text style={styles.stateTitle}>Attendance Window Closed</Text>
+            <Text style={styles.stateText}>
+              Attendance verification is currently closed. Please check back during the attendance window.
+            </Text>
+            <AppButton title="Try Again" onPress={() => runVerification("initial")} style={styles.actionBtn} />
+          </View>
+        );
+
+      case "lowAccuracy":
+        return (
+          <View style={styles.centerBox}>
+            <Text style={styles.stateEmoji}>📡</Text>
+            <Text style={styles.stateTitle}>Low Location Accuracy</Text>
+            <Text style={styles.stateText}>
+              Location accuracy is low. Please move to an open area and try again.
+            </Text>
+            <AppButton title="Retry" onPress={() => runVerification("initial")} style={styles.actionBtn} />
+          </View>
+        );
+
+      case "locationUnavailable":
+        return (
+          <View style={styles.centerBox}>
+            <Text style={styles.stateEmoji}>📍</Text>
+            <Text style={styles.stateTitle}>Location Unavailable</Text>
+            <Text style={styles.stateText}>
+              Unable to get your location. Please try again.
+            </Text>
+            <AppButton title="Retry" onPress={() => runVerification("initial")} style={styles.actionBtn} />
+          </View>
+        );
+
+      case "networkError":
+        return (
+          <View style={styles.centerBox}>
+            <Text style={styles.stateEmoji}>📡</Text>
+            <Text style={styles.stateTitle}>Connection Error</Text>
+            <Text style={styles.stateText}>
+              Unable to verify attendance. Please check your internet connection.
+            </Text>
+            <AppButton title="Retry" onPress={() => runVerification("initial")} style={styles.actionBtn} />
           </View>
         );
 

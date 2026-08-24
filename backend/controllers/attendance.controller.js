@@ -3,6 +3,7 @@ import Hostel from "../models/hostel.model.js";
 import LocationLog from "../models/locationLog.model.js";
 import StudentProfile from "../models/studentProfile.model.js";
 import User from "../models/user.model.js";
+import { ATTENDANCE_CONFIG } from "../config/attendance.js";
 import { haversineDistance } from "../utils/haversine.js";
 import {
   defaultSlotByTime,
@@ -14,8 +15,7 @@ import { decideAttendance } from "../utils/attendanceDecision.js";
 import { createNotification } from "./notification.controller.js";
 import { logAudit } from "../utils/audit.js";
 
-const MAX_ACCEPTABLE_ACCURACY =
-  Number(process.env.MAX_ACCEPTABLE_ACCURACY) || 100;
+const MAX_ACCEPTABLE_ACCURACY = ATTENDANCE_CONFIG.maxAcceptableAccuracy;
 
 // Determines the data scope for attendance listing endpoints.
 // admin → all records; warden → records for the warden's hostel/block only.
@@ -196,6 +196,8 @@ export const verifyLocation = async (req, res) => {
   try {
     const { latitude, longitude, accuracy, isMocked = false } = req.body;
 
+    // Defense in depth — the route-level middleware already validates, but we
+    // keep the check here in case the route is called from anywhere else.
     if (latitude === undefined || latitude === null || longitude === undefined || longitude === null) {
       return res.status(400).json({
         success: false,
@@ -206,7 +208,7 @@ export const verifyLocation = async (req, res) => {
 
     const lat = Number(latitude);
     const lng = Number(longitude);
-    if (isNaN(lat) || isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
       return res.status(400).json({
         success: false,
         code: "INVALID_COORDINATES",
@@ -218,12 +220,14 @@ export const verifyLocation = async (req, res) => {
     if (!user || user.role !== "student") {
       return res.status(403).json({
         success: false,
+        code: "UNAUTHORIZED",
         message: "Only students can verify attendance location",
       });
     }
     if (!user.isActive) {
       return res.status(403).json({
         success: false,
+        code: "UNAUTHORIZED",
         message: "User is inactive",
       });
     }
@@ -239,6 +243,7 @@ export const verifyLocation = async (req, res) => {
     if (student.status !== "active") {
       return res.status(403).json({
         success: false,
+        code: "UNAUTHORIZED",
         message: "Student profile is not active",
       });
     }
@@ -253,7 +258,7 @@ export const verifyLocation = async (req, res) => {
       });
     }
 
-    const radius = hostel.radiusMeters;
+    const radius = hostel.radiusMeters || ATTENDANCE_CONFIG.defaultRadiusMeters;
     if (
       hostel.latitude === undefined ||
       hostel.latitude === null ||
@@ -266,6 +271,21 @@ export const verifyLocation = async (req, res) => {
         success: false,
         code: "HOSTEL_LOCATION_NOT_CONFIGURED",
         message: "Hostel attendance location is not configured",
+      });
+    }
+
+    // Configurable daily attendance window check.
+    const currentTime = getCurrentTimeHHMM();
+    const windowOpen = isTimeInRange(
+      currentTime,
+      ATTENDANCE_CONFIG.windowStart,
+      ATTENDANCE_CONFIG.windowEnd
+    );
+    if (!windowOpen) {
+      return res.status(400).json({
+        success: false,
+        code: "ATTENDANCE_WINDOW_CLOSED",
+        message: "Attendance verification is currently closed.",
       });
     }
 
@@ -299,10 +319,10 @@ export const verifyLocation = async (req, res) => {
       code = "LOCATION_ACCURACY_LOW";
     } else if (decision.status === "present") {
       status = "present";
-      code = "INSIDE_RADIUS";
+      code = "PRESENT";
     } else {
       status = "outside_hostel";
-      code = "OUTSIDE_RADIUS";
+      code = "OUTSIDE";
     }
 
     // Business rule: once PRESENT for a period, never downgrade to outside/absent.
@@ -319,13 +339,11 @@ export const verifyLocation = async (req, res) => {
 
     if (existingForPeriod) {
       alreadyRecorded = true;
-      // A present record is final for the period — do not change it.
       if (existingForPeriod.status === "present") {
         attendance = existingForPeriod;
         status = "present";
-        code = "ALREADY_PRESENT";
+        code = "ALREADY_RECORDED";
       } else if (status === "present") {
-        // Upgrade a pending/absent record to present once verified inside.
         attendance = await Attendance.findByIdAndUpdate(
           existingForPeriod._id,
           {
@@ -340,29 +358,43 @@ export const verifyLocation = async (req, res) => {
           { new: true }
         );
         attendanceMarked = true;
-        code = "INSIDE_RADIUS";
+        code = "PRESENT";
       } else {
-        // Outside / unavailable — keep the existing (non-present) record.
         attendance = existingForPeriod;
       }
     } else {
       const recordStatus =
         status === "present" ? "present" : status === "outside_hostel" ? "absent" : "pending";
-      attendance = await Attendance.create({
-        studentId: student._id,
-        hostelId: hostel._id,
-        date,
-        slot,
-        status: recordStatus,
-        latitude: lat,
-        longitude: lng,
-        accuracy: accuracy ?? null,
-        distanceFromHostel: distance,
-        markedAt: new Date(),
-        source: "auto_location",
-        reason: decision.reason,
-      });
-      attendanceMarked = status === "present";
+      try {
+        attendance = await Attendance.create({
+          studentId: student._id,
+          hostelId: hostel._id,
+          date,
+          slot,
+          status: recordStatus,
+          latitude: lat,
+          longitude: lng,
+          accuracy: accuracy ?? null,
+          distanceFromHostel: distance,
+          markedAt: new Date(),
+          source: "auto_location",
+          reason: decision.reason,
+        });
+        attendanceMarked = status === "present";
+      } catch (createErr) {
+        // E11000 = duplicate key (race condition: two concurrent requests).
+        // Fetch the existing record and return it gracefully.
+        if (createErr.code === 11000) {
+          attendance = await Attendance.findOne({ studentId: student._id, date, slot });
+          alreadyRecorded = true;
+          if (attendance && attendance.status === "present") {
+            status = "present";
+            code = "ALREADY_RECORDED";
+          }
+        } else {
+          throw createErr;
+        }
+      }
     }
 
     // Non-spammy notification — only when a fresh record is persisted.
@@ -388,6 +420,7 @@ export const verifyLocation = async (req, res) => {
         alreadyRecorded,
         distanceFromHostel: distance,
         allowedRadius: radius,
+        bufferMeters: ATTENDANCE_CONFIG.bufferMeters,
         accuracy: accuracy ?? null,
         reason: decision.reason,
         slot,
@@ -401,8 +434,8 @@ export const verifyLocation = async (req, res) => {
     console.error("verifyLocation error:", error);
     return res.status(500).json({
       success: false,
+      code: "SERVER_ERROR",
       message: "Server error while verifying location",
-      error: error.message,
     });
   }
 };
@@ -648,6 +681,7 @@ export const reviewAttendance = async (req, res) => {
     if (!["present", "absent", "pending"].includes(status)) {
       return res.status(400).json({
         success: false,
+        code: "INVALID_STATUS",
         message: "Invalid status",
       });
     }
@@ -656,15 +690,81 @@ export const reviewAttendance = async (req, res) => {
     if (!attendance) {
       return res.status(404).json({
         success: false,
+        code: "NOT_FOUND",
         message: "Attendance record not found",
       });
     }
 
+    // Warden scope enforcement: a warden may only review students in their own
+    // assigned hostel/block. The assignment always comes from the database.
+    if (req.user.role === "warden") {
+      const warden = await User.findById(req.user.id);
+      if (!warden || warden.role !== "warden") {
+        return res.status(403).json({
+          success: false,
+          code: "UNAUTHORIZED",
+          message: "Not authorized to review this attendance",
+        });
+      }
+      const student = await StudentProfile.findById(attendance.studentId);
+      if (!student) {
+        return res.status(404).json({
+          success: false,
+          code: "NOT_FOUND",
+          message: "Student profile not found",
+        });
+      }
+      if (warden.blockId && String(student.blockId) !== String(warden.blockId)) {
+        return res.status(403).json({
+          success: false,
+          code: "UNAUTHORIZED",
+          message: "Not authorized to review this attendance",
+        });
+      }
+      if (
+        !warden.blockId &&
+        warden.hostelId &&
+        String(student.hostelId) !== String(warden.hostelId)
+      ) {
+        return res.status(403).json({
+          success: false,
+          code: "UNAUTHORIZED",
+          message: "Not authorized to review this attendance",
+        });
+      }
+      if (!warden.blockId && !warden.hostelId) {
+        return res.status(403).json({
+          success: false,
+          code: "UNAUTHORIZED",
+          message: "Warden is not assigned to any hostel",
+        });
+      }
+    }
+
+    const oldStatus = attendance.status;
     attendance.status = status;
     attendance.reason = reason || attendance.reason;
     attendance.source = "manual_review";
 
     await attendance.save();
+
+    // Every manual correction is audited — never a silent modification.
+    await logAudit({
+      userId: req.user.id,
+      action: "ATTENDANCE_MANUAL_UPDATE",
+      entity: "Attendance",
+      entityId: attendance._id,
+      metadata: {
+        studentId: String(attendance.studentId),
+        attendanceId: String(attendance._id),
+        oldStatus,
+        newStatus: status,
+        reason: reason || null,
+        changedByRole: req.user.role,
+        date: attendance.date,
+      },
+      req,
+    });
 
     return res.status(200).json({
       success: true,
@@ -675,8 +775,8 @@ export const reviewAttendance = async (req, res) => {
     console.error("reviewAttendance error:", error);
     return res.status(500).json({
       success: false,
+      code: "SERVER_ERROR",
       message: "Server error while reviewing attendance",
-      error: error.message,
     });
   }
 };

@@ -35,6 +35,18 @@ export async function getAttendanceByDate(date, slot) {
   return apiGet(query);
 }
 
+export async function getWardenAttendance(date, slot) {
+  let query = `/attendance/warden?date=${date}`;
+  if (slot) query += `&slot=${slot}`;
+  return apiGet(query);
+}
+
+export async function getAdminAttendance(date, slot) {
+  let query = `/attendance/admin?date=${date}`;
+  if (slot) query += `&slot=${slot}`;
+  return apiGet(query);
+}
+
 export async function getAttendanceSummary(date) {
   let query = "/attendance/summary";
   if (date) query += `?date=${date}`;
