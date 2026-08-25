@@ -4,7 +4,7 @@ import { COLORS, FONT_SIZE, RADIUS, SPACING } from "../../theme";
 import { AppHeader, Avatar, Badge, AppButton, AppCard } from "../../components";
 import { useAuth } from "../../context/AuthContext";
 import { useFetch } from "../../hooks/useFetch";
-import attendanceService from "../../services/attendanceService";
+import * as attendanceService from "../../services/attendanceService";
 
 const displayName = (obj) => {
   if (!obj) return "Not Assigned";

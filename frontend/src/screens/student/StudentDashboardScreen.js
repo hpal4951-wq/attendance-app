@@ -4,7 +4,7 @@ import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { COLORS, FONT_SIZE, RADIUS, SPACING, SHADOW } from "../../theme";
 import { useAuth } from "../../context/AuthContext";
 import { AppHeader, AppCard, ErrorView, LoadingScreen, AttendanceStatus, AppButton, NotificationBell, MenuCard } from "../../components";
-import attendanceService from "../../services/attendanceService";
+import * as attendanceService from "../../services/attendanceService";
 import analyticsService from "../../services/analyticsService";
 import pollService from "../../services/pollService";
 import menuService from "../../services/menuService";

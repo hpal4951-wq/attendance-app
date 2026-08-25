@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, SafeAreaView, FlatList, RefreshControl, Pressab
 import { useNavigation } from "@react-navigation/native";
 import { COLORS, FONT_SIZE, RADIUS, SPACING, SHADOW } from "../../theme";
 import { AppHeader, AppCard, AppSelect, EmptyState, ErrorView, LoadingScreen, AttendanceStatus } from "../../components";
-import attendanceService from "../../services/attendanceService";
+import * as attendanceService from "../../services/attendanceService";
 import { getErrorMessage } from "../../utils/error";
 import { useFetch } from "../../hooks/useFetch";
 import { DatePickerModal } from "../../components";

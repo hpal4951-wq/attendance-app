@@ -4,7 +4,7 @@ import { useNavigation } from "@react-navigation/native";
 import { COLORS, FONT_SIZE, RADIUS, SPACING, SHADOW } from "../../theme";
 import { AppHeader, AppCard, AppButton, AppInput, EmptyState, ErrorView, LoadingScreen, AttendanceStatus } from "../../components";
 import wardenService from "../../services/wardenService";
-import attendanceService from "../../services/attendanceService";
+import * as attendanceService from "../../services/attendanceService";
 import { getErrorMessage } from "../../utils/error";
 import { useFetch, useFocusReload } from "../../hooks/useFetch";
 

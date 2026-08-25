@@ -4,7 +4,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import { COLORS, FONT_SIZE, RADIUS, SPACING, SHADOW } from "../../theme";
 import { AppHeader, AppButton, AppCard } from "../../components";
 import { ENABLE_TEST_LOCATION } from "../../constants/config";
-import attendanceService from "../../services/attendanceService";
+import * as attendanceService from "../../services/attendanceService";
 import locationService from "../../services/locationService";
 import { getErrorMessage } from "../../utils/error";
 
