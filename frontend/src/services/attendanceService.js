@@ -29,6 +29,17 @@ export async function getMyAttendance({ month, year, slot } = {}) {
   return apiGet(query);
 }
 
+// Backend-computed monthly summary (authoritative percentage).
+export async function getMyMonthlyAttendance({ month, year } = {}) {
+  const now = new Date();
+  const params = [];
+  if (month) params.push(`month=${month}`);
+  if (year) params.push(`year=${year}`);
+  const qs = params.length ? "?" + params.join("&") : "";
+  const res = await apiGet(`/attendance/my/monthly${qs}`);
+  return res?.data || {};
+}
+
 export async function getAttendanceByDate(date, slot) {
   let query = `/attendance/list?date=${date}`;
   if (slot) query += `&slot=${slot}`;

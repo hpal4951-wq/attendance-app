@@ -54,6 +54,13 @@ const attendanceSchema = new mongoose.Schema(
       enum: ["auto_location", "manual_review"],
       default: "auto_location",
     },
+    // Set by the backend, never by the client: "gps" when auto-verified from
+    // device location, "manual" when corrected by a warden/admin.
+    verificationMethod: {
+      type: String,
+      enum: ["gps", "manual"],
+      default: "gps",
+    },
     reason: {
       type: String,
       trim: true,

@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import { View, Text, StyleSheet, SafeAreaView, FlatList, RefreshControl, Pressable } from "react-native";
-import { useNavigation } from "@react-navigation/native";
-import { COLORS, FONT_SIZE, RADIUS, SPACING, SHADOW } from "../../theme";
+import { COLORS, FONT_SIZE, RADIUS, SPACING } from "../../theme";
 import { AppHeader, AppCard, AppSelect, EmptyState, ErrorView, LoadingScreen, AttendanceStatus } from "../../components";
 import * as attendanceService from "../../services/attendanceService";
 import { getErrorMessage } from "../../utils/error";
@@ -15,7 +14,6 @@ const SLOT_FILTERS = [
 ];
 
 export default function AttendanceHistoryScreen() {
-  const navigation = useNavigation();
   const [slot, setSlot] = useState("");
   const [pickerVisible, setPickerVisible] = useState(false);
   const [monthYear, setMonthYear] = useState(null); // "YYYY-MM" or null for all
@@ -34,7 +32,17 @@ export default function AttendanceHistoryScreen() {
     [slot, monthYear]
   );
 
+  const monthly = useFetch(
+    () => {
+      if (!monthYear) return Promise.resolve(null);
+      const [y, m] = monthYear.split("-");
+      return attendanceService.getMyMonthlyAttendance({ month: m, year: y });
+    },
+    [monthYear]
+  );
+
   const list = records?.data || (Array.isArray(records) ? records : []);
+  const monthData = monthly.data;
 
   const toDisplayStatus = (r) => {
     if (r.status === "present") return "present";
@@ -63,6 +71,33 @@ export default function AttendanceHistoryScreen() {
           keyExtractor={(item) => String(item._id)}
           contentContainerStyle={styles.list}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
+          ListHeaderComponent={
+            monthData && monthData.totalDays > 0 ? (
+              <AppCard style={styles.monthlyCard}>
+                <Text style={styles.monthlyTitle}>
+                  {new Date(monthData.year, monthData.month - 1).toLocaleString("default", { month: "long", year: "numeric" })}
+                </Text>
+                <View style={styles.monthlyRow}>
+                  <View style={styles.monthlyBox}>
+                    <Text style={[styles.monthlyValue, { color: COLORS.success }]}>{monthData.presentDays}</Text>
+                    <Text style={styles.monthlyLabel}>Present</Text>
+                  </View>
+                  <View style={styles.monthlyBox}>
+                    <Text style={[styles.monthlyValue, { color: COLORS.danger }]}>{monthData.outsideDays}</Text>
+                    <Text style={styles.monthlyLabel}>Outside</Text>
+                  </View>
+                  <View style={styles.monthlyBox}>
+                    <Text style={[styles.monthlyValue, { color: COLORS.warning }]}>{monthData.notVerifiedDays}</Text>
+                    <Text style={styles.monthlyLabel}>Not Verified</Text>
+                  </View>
+                  <View style={styles.monthlyBox}>
+                    <Text style={[styles.monthlyValue, { color: COLORS.primary }]}>{monthData.attendancePercentage}%</Text>
+                    <Text style={styles.monthlyLabel}>Attendance</Text>
+                  </View>
+                </View>
+              </AppCard>
+            ) : null
+          }
           ListEmptyComponent={
             <EmptyState emoji="🗓️" title="No attendance records" description="Your attendance history will appear here." />
           }
@@ -108,6 +143,12 @@ const styles = StyleSheet.create({
   dateBtnText: { fontSize: FONT_SIZE.sm, fontWeight: "600", color: COLORS.textPrimary },
   slotSelect: { flex: 1, marginBottom: 0 },
   list: { padding: SPACING.lg, paddingBottom: SPACING.xxxl },
+  monthlyCard: { padding: SPACING.lg, marginBottom: SPACING.md },
+  monthlyTitle: { fontSize: FONT_SIZE.lg, fontWeight: "800", color: COLORS.textPrimary, marginBottom: SPACING.md, textAlign: "center" },
+  monthlyRow: { flexDirection: "row", gap: SPACING.sm },
+  monthlyBox: { flex: 1, alignItems: "center", backgroundColor: COLORS.bg, borderRadius: RADIUS.md, paddingVertical: SPACING.sm },
+  monthlyValue: { fontSize: FONT_SIZE.lg, fontWeight: "900" },
+  monthlyLabel: { fontSize: FONT_SIZE.xs, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 0.4, marginTop: 2 },
   card: { marginBottom: SPACING.sm },
   cardHeader: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: SPACING.md, marginBottom: 6 },
   date: { fontSize: FONT_SIZE.lg, fontWeight: "700", color: COLORS.textPrimary },

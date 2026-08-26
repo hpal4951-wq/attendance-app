@@ -64,10 +64,20 @@ export const getWardenDashboard = async (req, res) => {
       ? await Attendance.find({ studentId: { $in: studentIds }, date })
       : [];
 
+    // One status per student for the day (present wins; otherwise the latest).
+    const byStudent = new Map();
+    records.forEach((r) => {
+      const key = String(r.studentId);
+      const existing = byStudent.get(key);
+      if (!existing) byStudent.set(key, r);
+      else if (r.status === "present" && existing.status !== "present") byStudent.set(key, r);
+      else if (existing.status !== "present" && r.markedAt > existing.markedAt) byStudent.set(key, r);
+    });
+
     let present = 0;
     let absent = 0;
     let pending = 0;
-    records.forEach((r) => {
+    byStudent.forEach((r) => {
       if (r.status === "present") present += 1;
       else if (r.status === "absent") absent += 1;
       else if (r.status === "pending") pending += 1;

@@ -5,10 +5,12 @@ import {
   getAttendanceByDate,
   getAttendanceSummary,
   getMyAttendance,
+  getMyMonthlyAttendance,
   getPendingAttendance,
   reviewAttendance,
   verifyLocation,
   getTodayAttendance,
+  getHostelAttendanceByDate,
 } from "../controllers/attendance.controller.js";
 import { protect } from "../middleware/auth.middleware.js";
 import { allowRoles } from "../middleware/role.middleware.js";
@@ -28,6 +30,11 @@ router.post("/verify-location", locationLimiter, protect, allowRoles("student"),
 router.get("/today", protect, allowRoles("student"), getTodayAttendance);
 router.post("/auto-check", protect, allowRoles("student"), autoCheckAttendance);
 router.get("/my", protect, allowRoles("student"), getMyAttendance);
+router.get("/my/monthly", protect, allowRoles("student"), getMyMonthlyAttendance);
+
+// warden-only hostel attendance monitor (scope derived from JWT/DB mapping)
+router.get("/hostel/today", protect, allowRoles("warden"), getHostelAttendanceByDate);
+router.get("/hostel", protect, allowRoles("warden"), getHostelAttendanceByDate);
 
 // warden-only attendance list (assigned hostel/block scope from DB)
 router.get("/warden", protect, allowRoles("warden"), getAttendanceByDate);

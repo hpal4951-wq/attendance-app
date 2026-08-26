@@ -59,14 +59,70 @@ export const deactivateDeviceToken = async (token) => {
 
 // ─── Push delivery ──────────────────────────────────────────
 const FCM_BATCH_SIZE = 500; // Firebase multicast limit
+const EXPO_PUSH_API = "https://exp.host/--/api/v2/push/send";
+const EXPO_BATCH_SIZE = 100; // Expo push service limit per request
 
-export async function sendPushToTokens(tokens, { title, body, data = {}, channelId = "general" }) {
+const isExpoToken = (token) => typeof token === "string" && token.startsWith("ExponentPushToken[");
+
+// Sends to Expo push tokens (Expo Go / dev clients). Expo's push service
+// forwards to FCM/APNs on the device — no Firebase Admin credentials needed.
+async function sendExpoPushTokens(tokens, { title, body, data = {}, channelId = "general" }) {
+  let success = 0;
+  let failed = 0;
+  const unique = [...new Set(tokens.filter(Boolean))];
+
+  for (let i = 0; i < unique.length; i += EXPO_BATCH_SIZE) {
+    const chunkTokens = unique.slice(i, i + EXPO_BATCH_SIZE);
+    const messages = chunkTokens.map((to) => ({
+      to,
+      title,
+      body,
+      sound: "default",
+      priority: "high",
+      channelId,
+      data: { ...data, channelId },
+    }));
+    try {
+      const res = await fetch(EXPO_PUSH_API, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify(messages),
+      });
+      let json = null;
+      try { json = await res.json(); } catch (_) { json = null; }
+
+      if (!res.ok || !Array.isArray(json)) {
+        // Error responses (e.g. 400) come back as plain text or an errors object.
+        console.error("sendExpoPushTokens error:", res.status, String(json?.errors?.[0]?.message || json?.message || res.statusText || "Bad Request").slice(0, 200));
+        failed += chunkTokens.length;
+        continue;
+      }
+
+      json.forEach((r, idx) => {
+        if (r?.status === "ok" || r?.status === 200) {
+          success += 1;
+        } else {
+          failed += 1;
+          const err = r?.details?.error || "";
+          if (err === "DeviceNotRegistered" || err === "InvalidCredentials") {
+            deactivateDeviceToken(chunkTokens[idx]);
+          }
+        }
+      });
+    } catch (e) {
+      console.error("sendExpoPushTokens chunk error:", e.message);
+      failed += chunkTokens.length;
+    }
+  }
+  return { success, failed };
+}
+
+// Sends to native FCM tokens via Firebase Admin (dev builds / standalone APK).
+async function sendFcmTokens(tokens, { title, body, data = {}, channelId = "general" }) {
   const messaging = getMessaging();
-  if (!messaging) return { success: 0, failed: 0 };
+  if (!messaging) return { success: 0, failed: tokens.length };
 
-  const unique = [...new Set((tokens || []).filter(Boolean))];
-  if (unique.length === 0) return { success: 0, failed: 0 };
-
+  const unique = [...new Set(tokens.filter(Boolean))];
   let success = 0;
   let failed = 0;
 
@@ -97,9 +153,30 @@ export async function sendPushToTokens(tokens, { title, body, data = {}, channel
         }
       });
     } catch (e) {
-      console.error("sendPushToTokens batch error:", e.message);
+      console.error("sendFcmTokens batch error:", e.message);
       failed += chunk.length;
     }
+  }
+
+  return { success, failed };
+}
+
+export async function sendPushToTokens(tokens, payload) {
+  const expoTokens = (tokens || []).filter((t) => isExpoToken(t));
+  const fcmTokens = (tokens || []).filter((t) => t && !isExpoToken(t));
+
+  let success = 0;
+  let failed = 0;
+
+  if (expoTokens.length) {
+    const r = await sendExpoPushTokens(expoTokens, payload);
+    success += r.success;
+    failed += r.failed;
+  }
+  if (fcmTokens.length) {
+    const r = await sendFcmTokens(fcmTokens, payload);
+    success += r.success;
+    failed += r.failed;
   }
 
   return { success, failed };

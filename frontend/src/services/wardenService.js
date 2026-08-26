@@ -125,6 +125,27 @@ export async function getAttendanceMonitor(params = {}) {
   };
 }
 
+// Warden hostel attendance monitor: every student in the warden's authorized
+// scope for a date, with per-student status (including not_verified).
+export async function getHostelAttendance(params = {}) {
+  const res = await apiGet(`/attendance/hostel${buildQuery(params)}`);
+  const rows = Array.isArray(res?.data) ? res.data : [];
+  const summary = res?.summary || {
+    totalStudents: 0,
+    present: 0,
+    outside: 0,
+    pending: 0,
+    notVerified: 0,
+  };
+  return {
+    date: res?.date || params?.date || null,
+    totalStudents: res?.totalStudents ?? summary.totalStudents ?? rows.length,
+    presentPercentage: res?.presentPercentage ?? 0,
+    summary,
+    records: rows,
+  };
+}
+
 export async function getPendingAttendance() {
   const res = await apiGet("/attendance/pending");
   const rawRecords = Array.isArray(res?.data) ? res.data : [];

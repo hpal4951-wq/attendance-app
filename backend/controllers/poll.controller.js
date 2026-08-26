@@ -38,6 +38,7 @@ const serializePoll = (poll, opts = {}) => {
     status: getPollStatus(p),
     totalVotes,
     hasVoted: opts.hasVoted || false,
+    selectedOptionIds: opts.selectedOptionIds || [],
     createdAt: p.createdAt,
   };
 };
@@ -51,6 +52,12 @@ const getStudentProfile = async (userId) => {
 const hasVoted = async (pollId, studentId) => {
   const vote = await Vote.findOne({ pollId, studentId });
   return !!vote;
+};
+
+// Option ids the student currently selected for a poll (for re-vote prefill).
+const getVoteOptionIds = async (pollId, studentId) => {
+  const vote = await Vote.findOne({ pollId, studentId }).select("optionIds");
+  return vote ? (vote.optionIds || []).map((id) => String(id)) : [];
 };
 
 const getWardenHostel = async (userId) => {
@@ -79,7 +86,7 @@ export const getActivePolls = async (req, res) => {
     if (user?.role === "student") {
       const student = await getStudentProfile(req.user.id);
       visible = visible.filter((p) => pollVisibleToStudent(p, student));
-      const data = await Promise.all(visible.map(async (p) => serializePoll(p, { hasVoted: student ? await hasVoted(p._id, student._id) : false })));
+      const data = await Promise.all(visible.map(async (p) => serializePoll(p, { hasVoted: student ? await hasVoted(p._id, student._id) : false, selectedOptionIds: student ? await getVoteOptionIds(p._id, student._id) : [] })));
       return res.status(200).json({ success: true, count: data.length, data });
     }
 
@@ -100,7 +107,8 @@ export const getPollById = async (req, res) => {
     const student = await getStudentProfile(req.user.id);
     if (student && !pollVisibleToStudent(poll, student)) return forbidden(res, "Poll is not available for your hostel");
     const voted = student ? await hasVoted(poll._id, student._id) : false;
-    return res.status(200).json({ success: true, data: serializePoll(poll, { hasVoted: voted }) });
+    const selected = student ? await getVoteOptionIds(poll._id, student._id) : [];
+    return res.status(200).json({ success: true, data: serializePoll(poll, { hasVoted: voted, selectedOptionIds: selected }) });
   } catch (e) { return serverError(res, e); }
 };
 
@@ -132,7 +140,7 @@ export const getPollHistory = async (req, res) => {
     if (user?.role === "student") {
       const student = await getStudentProfile(req.user.id);
       history = history.filter((p) => pollVisibleToStudent(p, student));
-      const data = await Promise.all(history.map(async (p) => serializePoll(p, { hasVoted: student ? await hasVoted(p._id, student._id) : false })));
+      const data = await Promise.all(history.map(async (p) => serializePoll(p, { hasVoted: student ? await hasVoted(p._id, student._id) : false, selectedOptionIds: student ? await getVoteOptionIds(p._id, student._id) : [] })));
       return res.status(200).json({ success: true, count: data.length, data });
     }
     if (user?.role === "warden") {
@@ -159,9 +167,6 @@ export const submitVote = async (req, res) => {
     const status = getPollStatus(poll);
     if (status !== "active") return badRequest(res, status === "scheduled" ? "Poll has not started yet." : "Poll is closed.");
 
-    const existing = await Vote.findOne({ pollId: poll._id, studentId: student._id });
-    if (existing) return conflict(res, "You have already voted in this poll.");
-
     const { optionIds } = req.body;
     if (!Array.isArray(optionIds) || optionIds.length === 0) return badRequest(res, "optionIds array is required");
     if (poll.type === "single_choice" && optionIds.length !== 1) return badRequest(res, "Select exactly one option");
@@ -169,6 +174,27 @@ export const submitVote = async (req, res) => {
     const validIds = new Set(poll.options.map((o) => String(o._id)));
     for (const id of optionIds) {
       if (!validIds.has(String(id))) return badRequest(res, "Invalid option selected");
+    }
+
+    const existing = await Vote.findOne({ pollId: poll._id, studentId: student._id });
+
+    if (existing) {
+      // Vote change: keep ONE vote record; adjust option counters.
+      const oldIds = new Set((existing.optionIds || []).map((id) => String(id)));
+      const newIds = new Set(optionIds.map((id) => String(id)));
+      for (const id of oldIds) {
+        if (!newIds.has(id)) {
+          await Poll.updateOne({ _id: poll._id, "options._id": id }, { $inc: { "options.$.votes": -1 } });
+        }
+      }
+      for (const id of newIds) {
+        if (!oldIds.has(id)) {
+          await Poll.updateOne({ _id: poll._id, "options._id": id }, { $inc: { "options.$.votes": 1 } });
+        }
+      }
+      existing.optionIds = optionIds;
+      await existing.save();
+      return res.status(200).json({ success: true, message: "Your vote has been updated.", data: { pollId: poll._id, voted: true, changed: true } });
     }
 
     await Vote.create({ pollId: poll._id, studentId: student._id, optionIds });

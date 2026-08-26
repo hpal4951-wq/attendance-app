@@ -61,8 +61,17 @@ export const getAdminOverview = async (req, res) => {
     ]);
     const studentIds = allStudents.map((s) => s._id);
     const todayRecords = studentIds.length ? await Attendance.find({ studentId: { $in: studentIds }, date: today }) : [];
-    let present = 0, outside = 0, pending = 0;
+    // One status per student for the day (present wins; otherwise the latest).
+    const byStudent = new Map();
     todayRecords.forEach((r) => {
+      const key = String(r.studentId);
+      const existing = byStudent.get(key);
+      if (!existing) byStudent.set(key, r);
+      else if (r.status === "present" && existing.status !== "present") byStudent.set(key, r);
+      else if (existing.status !== "present" && r.markedAt > existing.markedAt) byStudent.set(key, r);
+    });
+    let present = 0, outside = 0, pending = 0;
+    byStudent.forEach((r) => {
       if (r.status === "present") present += 1;
       else if (r.status === "absent") outside += 1;
       else pending += 1;

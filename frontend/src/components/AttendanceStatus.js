@@ -45,6 +45,13 @@ const STATUS_META = {
     bg: COLORS.dangerLight,
     detail: "Student is outside the allowed hostel area",
   },
+  not_verified: {
+    label: "Not Verified",
+    icon: "•",
+    color: COLORS.textMuted,
+    bg: COLORS.bg,
+    detail: "No attendance record for this date",
+  },
 };
 
 function formatTime(iso) {

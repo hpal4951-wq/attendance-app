@@ -1,6 +1,7 @@
 import Attendance from "../models/attendance.model.js";
 import Hostel from "../models/hostel.model.js";
 import LocationLog from "../models/locationLog.model.js";
+import Room from "../models/room.model.js";
 import StudentProfile from "../models/studentProfile.model.js";
 import User from "../models/user.model.js";
 import { ATTENDANCE_CONFIG } from "../config/attendance.js";
@@ -174,6 +175,7 @@ export const autoCheckAttendance = async (req, res) => {
       distanceFromHostel: distance,
       markedAt: new Date(),
       source: "auto_location",
+      verificationMethod: "gps",
       reason: decision.reason,
     });
 
@@ -353,6 +355,7 @@ export const verifyLocation = async (req, res) => {
             accuracy: accuracy ?? null,
             distanceFromHostel: distance,
             markedAt: new Date(),
+            verificationMethod: "gps",
             reason: decision.reason,
           },
           { new: true }
@@ -378,6 +381,7 @@ export const verifyLocation = async (req, res) => {
           distanceFromHostel: distance,
           markedAt: new Date(),
           source: "auto_location",
+          verificationMethod: "gps",
           reason: decision.reason,
         });
         attendanceMarked = status === "present";
@@ -427,6 +431,10 @@ export const verifyLocation = async (req, res) => {
         code,
         attendanceMarked,
         alreadyRecorded,
+        // Predictable alias fields for client consumers:
+        distance,
+        radius,
+        attendanceRecorded: attendanceMarked,
         distanceFromHostel: distance,
         allowedRadius: radius,
         bufferMeters: ATTENDANCE_CONFIG.bufferMeters,
@@ -540,6 +548,82 @@ export const getMyAttendance = async (req, res) => {
   }
 };
 
+// One status per calendar day. If a student has both a morning and a night
+// record for the same date, "present" for any slot wins for the day;
+// otherwise the latest record represents the day.
+const pickDayRecord = (existing, candidate) => {
+  if (!existing) return candidate;
+  if (candidate.status === "present" && existing.status !== "present") return candidate;
+  if (existing.status !== "present" && candidate.markedAt > existing.markedAt) return candidate;
+  return existing;
+};
+
+export const getMyMonthlyAttendance = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user || user.role !== "student") {
+      return res.status(403).json({ success: false, message: "Only students can view their attendance" });
+    }
+    const student = await StudentProfile.findOne({ userId: user._id });
+    if (!student) {
+      return res.status(404).json({ success: false, code: "STUDENT_PROFILE_NOT_FOUND", message: "Student profile not found" });
+    }
+
+    const now = new Date();
+    const year = parseInt(req.query.year, 10) || now.getFullYear();
+    const month = parseInt(req.query.month, 10) || now.getMonth() + 1;
+    if (month < 1 || month > 12) {
+      return res.status(400).json({ success: false, code: "INVALID_MONTH", message: "month must be between 1 and 12" });
+    }
+    if (year < 2000 || year > 2100) {
+      return res.status(400).json({ success: false, code: "INVALID_YEAR", message: "invalid year" });
+    }
+
+    const prefix = `${year}-${String(month).padStart(2, "0")}`;
+    const records = await Attendance.find({
+      studentId: student._id,
+      date: { $regex: `^${prefix}-` },
+    }).sort({ date: -1, markedAt: -1 });
+
+    // Reduce to one representative record per day.
+    const byDate = new Map();
+    records.forEach((r) => {
+      byDate.set(r.date, pickDayRecord(byDate.get(r.date), r));
+    });
+
+    let presentDays = 0;
+    let outsideDays = 0;
+    let notVerifiedDays = 0;
+    byDate.forEach((r) => {
+      if (r.status === "present") presentDays += 1;
+      else if (r.status === "absent") outsideDays += 1;
+      else notVerifiedDays += 1;
+    });
+
+    const totalDays = byDate.size;
+    // Authoritative percentage: present days over all recorded days.
+    // OUTSIDE and NOT_VERIFIED days are included in the denominator.
+    const attendancePercentage = totalDays ? Math.round((presentDays / totalDays) * 100) : 0;
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        month,
+        year,
+        totalDays,
+        presentDays,
+        outsideDays,
+        notVerifiedDays,
+        attendancePercentage,
+        records: Array.from(byDate.values()),
+      },
+    });
+  } catch (error) {
+    console.error("getMyMonthlyAttendance error:", error);
+    return res.status(500).json({ success: false, code: "SERVER_ERROR", message: "Server error while fetching monthly attendance" });
+  }
+};
+
 export const getAttendanceByDate = async (req, res) => {
   try {
     const { date, slot } = req.query;
@@ -603,6 +687,105 @@ export const getAttendanceByDate = async (req, res) => {
       message: "Server error while fetching attendance list",
       error: error.message,
     });
+  }
+};
+
+// Warden hostel attendance monitor. The warden's authorized scope always comes
+// from the authenticated user's DB mapping — a client cannot supply a hostelId.
+// Returns every student in the scope with their per-date status, plus a summary
+// that includes students with NO record (not verified).
+export const getHostelAttendanceByDate = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user || user.role !== "warden") {
+      return res.status(403).json({ success: false, code: "UNAUTHORIZED", message: "Only wardens can view hostel attendance" });
+    }
+    const { hostelId, blockId } = user;
+    if (!hostelId && !blockId) {
+      return res.status(403).json({ success: false, code: "WARDEN_NOT_ASSIGNED", message: "Warden is not assigned to a hostel" });
+    }
+
+    const date = req.query.date || getTodayDateString();
+    const { search, status } = req.query;
+
+    const scopeQuery = blockId ? { blockId } : { hostelId };
+
+    if (search && String(search).trim()) {
+      const regex = new RegExp(String(search).trim(), "i");
+      const [matchingRooms, matchingUsers] = await Promise.all([
+        Room.find(blockId ? { blockId, roomNumber: regex } : { hostelId, roomNumber: regex }).select("_id"),
+        User.find({ $or: [{ name: regex }, { phone: regex }] }).select("_id"),
+      ]);
+      scopeQuery.$or = [
+        { studentCode: regex },
+        { userId: { $in: matchingUsers.map((u) => u._id) } },
+        { roomId: { $in: matchingRooms.map((r) => r._id) } },
+      ];
+    }
+
+    const [totalStudents, students, records] = await Promise.all([
+      StudentProfile.countDocuments(scopeQuery),
+      StudentProfile.find(scopeQuery)
+        .populate([
+          { path: "userId", select: "name phone" },
+          { path: "roomId", select: "roomNumber" },
+        ])
+        .sort({ studentCode: 1 }),
+      Attendance.find({ date }),
+    ]);
+
+    // Best record per student for the date.
+    const recordMap = new Map();
+    records.forEach((r) => {
+      const key = String(r.studentId);
+      recordMap.set(key, pickDayRecord(recordMap.get(key), r));
+    });
+
+    let present = 0;
+    let outside = 0;
+    let pending = 0;
+    const rows = students.map((s) => {
+      const rec = recordMap.get(String(s._id));
+      let st;
+      if (!rec) st = "not_verified";
+      else if (rec.status === "present") { st = "present"; present += 1; }
+      else if (rec.status === "absent") { st = "absent"; outside += 1; }
+      else { st = "pending"; pending += 1; }
+      const room = s.roomId || {};
+      const userObj = s.userId || {};
+      return {
+        studentId: s._id,
+        studentCode: s.studentCode,
+        name: userObj.name || s.studentCode || "Unknown",
+        room: room.roomNumber || s.roomNumber || null,
+        status: st,
+        verifiedAt: rec ? rec.markedAt : null,
+        distance: rec ? rec.distanceFromHostel : null,
+        reason: rec ? rec.reason : null,
+        verificationMethod: rec ? rec.verificationMethod || "gps" : null,
+        slot: rec ? rec.slot : null,
+      };
+    });
+
+    const notVerified = Math.max(0, totalStudents - (present + outside + pending));
+
+    let filtered = rows;
+    if (status && status !== "all") {
+      filtered = rows.filter((r) => r.status === status);
+    }
+
+    return res.status(200).json({
+      success: true,
+      date,
+      totalStudents,
+      summary: { totalStudents, present, outside, pending, notVerified },
+      presentPercentage: totalStudents ? Math.round((present / totalStudents) * 100) : 0,
+      count: filtered.length,
+      data: filtered,
+    });
+  } catch (error) {
+    console.error("getHostelAttendanceByDate error:", error);
+    return res.status(500).json({ success: false, code: "SERVER_ERROR", message: "Server error while fetching hostel attendance" });
   }
 };
 
@@ -754,6 +937,7 @@ export const reviewAttendance = async (req, res) => {
     attendance.status = status;
     attendance.reason = reason || attendance.reason;
     attendance.source = "manual_review";
+    attendance.verificationMethod = "manual";
 
     await attendance.save();
 

@@ -303,7 +303,7 @@ export default function AttendanceScreen() {
           Attendance is verified automatically from your location. You do not need to mark it manually.
         </Text>
         {renderState()}
-        {ENABLE_TEST_LOCATION ? <DevTestSection onTest={runVerification} /> : null}
+        {__DEV__ && ENABLE_TEST_LOCATION ? <DevTestSection onTest={runVerification} /> : null}
       </ScrollView>
     </SafeAreaView>
   );
